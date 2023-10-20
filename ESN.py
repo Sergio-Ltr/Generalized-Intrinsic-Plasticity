@@ -6,7 +6,7 @@ class Reservoir():
     """
     
     """
-    def __init__(self, M=1, N=10, ro_rescale = 1, bias = True):
+    def __init__(self, M=1, N=10, ro_rescale = 1, W_x_range = (-2.5, 2.5), bias = True, bias_range = (-1,1), ):
         # Number of recurrent units
         self.N = N
         
@@ -143,9 +143,8 @@ class EchoStateNetwork():
       Y_pred_df = pd.DataFrame(Y_pred.detach().numpy()).T
       Y_truth_df = pd.DataFrame(Y.numpy()).T
 
-      ax = Y_pred_df.plot(grid=True, label='Reconstructed', style=['r*-','bo-','y^-'], linewidth=2.0)
-      Y_truth_df.plot(color='green', grid=True, label='Original', linewidth=0.75, ax=ax)
-
+      ax = Y_truth_df.plot(grid=True, label='Target', style=['g-','bo-','y^-'], linewidth=0.5, )
+      Y_pred_df.plot(grid=True, label='Reconstructed', style=['r--','bo-','y^-'], linewidth=0.5, ax=ax)
 
     return metric.evaluate( X = Y, Y = Y_pred)
 
