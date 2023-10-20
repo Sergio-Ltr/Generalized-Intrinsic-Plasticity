@@ -6,30 +6,32 @@ class Reservoir():
     """
     
     """
-    def __init__(self, M=1, N=10, ro_rescale = 1, W_x_range = (-2.5, 2.5), bias = True, bias_range = (-1,1), ):
+    def __init__(self, M=1, N=10, sparsity=0, ro_rescale = 1, W_range = (-2.5, 2.5), bias = True, bias_range = (-1,1)):
+        # Number of input features
+        self.M = M
+        
         # Number of recurrent units
         self.N = N
         
-        # Number of input features
-        self.M = M
-
         # Presence of libear bias for input data 
         self.bias = bias
 
         # Sample recurrent weights from a uniform distribution.
-        w_dist = torch.distributions.uniform.Uniform(-1, 1)
-        self.W_x = w_dist.sample((N, N)) 
+        unitary_dist = torch.distributions.uniform.Uniform(-1, 1)
+        # Regulate sparsity using the dropout function (weird but effective)
+        self.W_x = torch.nn.functional.dropout(unitary_dist.sample((N, N)), sparsity) 
 
         # Sample input weights randomly (linear bias are absorbed inside here). 
-        self.W_u = w_dist.sample((M + 1 if bias else M, N)) 
+        w_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
+        self.W_u = w_dist.sample((M, N)) 
+
+        if bias: 
+          bias_dist = torch.distributions.uniform.Uniform(bias_range[0], bias_range[1])
+          self.W_u = torch.cat((bias_dist.sample((1,N)), self.W_u))
         
         # Rescale recurrent weights to unitry spectral radius 
         max_eig = max(abs(torch.linalg.eigvals(self.W_x)))
         self.W_x = (self.W_x/max_eig ) * ro_rescale
-
-        # Matrices then need to be transpoed.
-        #self.W_u = torch.transpose(self.W_u , 0, 1)
-        #self.W_x = torch.transpose(self.W_x, 0, 1)
 
         # Initialize first internal states with zeros.
         self.X = torch.zeros(N)
@@ -37,45 +39,30 @@ class Reservoir():
 
 
     """
-    
+    - U : a L X M tensor representing a timeseries, where L is the number of timesteps and M the number of features.  
     """
-    def predict(self, U: torch.Tensor, reset_internal_state = True, save_activation = True):
-        if type(self).__name__ == Reservoir.__name__: 
-            self.a = torch.ones(self.N, requires_grad = False)
-            self.b = torch.zeros(self.N, requires_grad = False)
-
+    def predict(self, U: torch.Tensor):
         # Count number of timesteps to be porocessed.
-        input_len = U.shape[1]
-        output = torch.zeros((input_len, self.N))
+        l = U.shape[0]
+        output = torch.zeros((l, self.N))
 
-        # Transpose input so that it can be multiplied by the weight matrix. 
-        U = torch.transpose(U.float(), 0, 1)
-
+        # Size of U should become L X M + 1
         if self.bias:
-          U = torch.column_stack((U, torch.ones(input_len)))
-
-        # Reset Reservoir internal state if specified. 
-        if reset_internal_state:
-            self.X = torch.zeros(self.N)
-
-        # Prepare a buffer to save internal states if required. 
-        if save_activation:
-            self.activation_buffer = torch.zeros((input_len, self.N))
+          U = torch.column_stack((torch.ones(l), U.float()))
 
         # Iterate over each input timestamp 
-        for i in range(input_len):
-
-            self.net = torch.matmul(torch.matmul(U[i,:], self.W_u), torch.diag(self.a)) + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b
-            output[i, :] = self.activation(self.net)
-
-            # Useful to plot neural activity histogram            
-            if save_activation:
-                self.activation_buffer[i, :] = torch.matmul(torch.matmul(U[i,:], self.W_u), torch.diag(self.a)) + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b
-    
+        for i in range(l):
+            self.net = torch.matmul(U[i], self.W_u) + torch.matmul( self.X, self.W_x)
             self.X = self.activation(self.net)
+            output[i, :] = self.X 
 
         return output
 
+
+    """
+    """
+    def reset_initial_state(self): 
+       self.X = torch.zeros(self.N)
 
     """
     
@@ -99,18 +86,18 @@ class Readout():
   def __init__(self):
     self.trained = False
 
-  def train(self, X, Y, lambda_thikonov=0):
+  def train(self, X: torch.Tensor, Y: torch.Tensor, lambda_thikonov=0):
     input_size = X.shape[0]
     N = X.shape[1]
 
-    A = torch.column_stack((X, torch.ones(input_size)))
-    correlation_matrix = torch.matmul(torch.transpose(A,0,1), A)
+    X = torch.column_stack((torch.ones(input_size), X))
+    correlation_matrix = torch.matmul(torch.transpose(X,0,1), X)
 
     if lambda_thikonov != 0:
       correlation_matrix += torch.mul(lambda_thikonov, torch.eye(N+1))
 
     ## @TODO revrite this
-    self.W = torch.matmul(torch.matmul(torch.linalg.inv(correlation_matrix), torch.transpose(A,0,1)), torch.transpose(Y.float(), 0,1))
+    self.W = torch.matmul(torch.matmul(torch.linalg.inv(correlation_matrix), torch.transpose(X,0,1)), Y.float())
     self.trained = True
 
 
@@ -129,19 +116,19 @@ class EchoStateNetwork():
     self.readout = Readout()
 
   def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 0): 
-    X = self.reservoir.predict(U, True)
+    X = self.reservoir.predict(U)
     self.readout.train(X, Y, lambda_thikonov) 
 
   def evaluate(self, U: torch.Tensor, Y: torch.Tensor, metric: Metric = NRMSE(), plot = False):
     if self.readout.trained == False: 
       return
     
-    X = self.reservoir.predict(U, False)
-    Y_pred: torch.Tensor = torch.transpose(self.readout.predict(X),0, 1) 
+    X = self.reservoir.predict(U)
+    Y_pred: torch.Tensor = self.readout.predict(X)
 
     if plot == True:
-      Y_pred_df = pd.DataFrame(Y_pred.detach().numpy()).T
-      Y_truth_df = pd.DataFrame(Y.numpy()).T
+      Y_pred_df = pd.DataFrame(Y_pred.detach().numpy())
+      Y_truth_df = pd.DataFrame(Y.numpy())
 
       ax = Y_truth_df.plot(grid=True, label='Target', style=['g-','bo-','y^-'], linewidth=0.5, )
       Y_pred_df.plot(grid=True, label='Reconstructed', style=['r--','bo-','y^-'], linewidth=0.5, ax=ax)
@@ -153,13 +140,13 @@ class EchoStateNetwork():
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max
     mc = 0
 
-    X = self.reservoir.predict(U, True)[0: None, :]
+    X = self.reservoir.predict(U)[0: None, :]
     ts_len = X.shape[0]
     
-    Y = torch.transpose(self.readout.predict(X), 0, 1)
+    Y = self.readout.predict(X)
 
     for tau in range(tau_max):
-      mc += MemoryCapacityTau().evaluate(U[:, 0:ts_len -  tau],Y[:, tau: None])
+      mc += MemoryCapacityTau().evaluate(U[0:ts_len -  tau],Y[tau: None])
 
     return mc
      

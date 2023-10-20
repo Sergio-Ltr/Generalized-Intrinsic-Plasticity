@@ -79,12 +79,12 @@ Using a mask, hence multiple target distributions (or also optimizing only a sub
 their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
 """
 class IPMask:
-    def __init__(self, distributions, apply_activation = True):
+    def __init__(self, distributions : list[IPDistribution], apply_activation = True):
         self.N = len(distributions)
         self.distributions = distributions
         self.apply_activation = apply_activation 
 
-        self.areAllGaussian = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
+        self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
     def sample(self, timesteps_number): 
         self.samples = torch.zeros((timesteps_number, self.N))

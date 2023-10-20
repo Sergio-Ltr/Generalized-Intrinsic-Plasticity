@@ -8,8 +8,8 @@ class NARMA10:
 
         self.size = data.shape[1]
 
-        self.X_DATA = data[1,:].reshape((1, self.size))
-        self.Y_DATA = data[0,:].reshape((1, self.size))
+        self.X_DATA = data[1,:]
+        self.Y_DATA = data[0,:]
 
         if split: 
             self.split(percentages)
@@ -23,8 +23,8 @@ class NARMA10:
 
         for p in percentages: 
             idx = int(p * self.size/total) + prev_idx
-            X_chunks.append(self.X_DATA[:,prev_idx: idx])
-            Y_chunks.append(self.Y_DATA[:,prev_idx: idx])
+            X_chunks.append(self.X_DATA[prev_idx: idx])
+            Y_chunks.append(self.Y_DATA[prev_idx: idx])
             prev_idx
 
         self.X_TR, self.X_VAL, self.X_TS = tuple(X_chunks)
