@@ -59,12 +59,12 @@ class IPReservoir(Reservoir):
         # Iterate over each input timestamp 
         for i in range(l):
             # Useful to plot neural activity histogram            
-            self.net = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
+            net = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
             
             if save_net: 
-                self.buffer[i, :] = self.net
+                self.buffer[i, :] = net
             
-            self.X = self.activation(self.net)
+            self.X = self.activation(net)
             output[i, :] = self.X
 
         return output

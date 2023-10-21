@@ -57,13 +57,22 @@ class Reservoir():
 
         # Iterate over each input timestamp 
         for i in range(l):
-            self.net = torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.X, self.W_x) + self.b_x
-            self.X = self.activation(self.net)
+            self.X = self.activation(torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.X, self.W_x) + self.b_x)
             output[i, :] = self.X 
 
         return output
 
+    """
+    """
+    def warm_up(self, U:torch.Tensor): 
+       if self.X.any(): 
+          print('No transient applied. Reservoir was already warmed up') 
+          return False
+       
+       self.predict(U)
+       return True
 
+      
     """
     """
     def reset_initial_state(self): 
@@ -120,7 +129,16 @@ class EchoStateNetwork():
     self.reservoir = reservoir     
     self.readout = Readout()
 
-  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 0): 
+  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 100): 
+    if transient != 0: 
+      warm_up_applied = self.reservoir.warm_up(U[0:transient])
+
+      if warm_up_applied:
+        U = U[transient:None]
+        Y = Y[transient:None]  
+
+      print(Y.shape)
+
     X = self.reservoir.predict(U)
     self.readout.train(X, Y, lambda_thikonov) 
 
