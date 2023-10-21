@@ -23,11 +23,16 @@ class Reservoir():
 
         # Sample input weights randomly (linear bias are absorbed inside here). 
         w_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
-        self.W_u = w_dist.sample((M, N)) 
+        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0)
 
         if bias: 
           bias_dist = torch.distributions.uniform.Uniform(bias_range[0], bias_range[1])
-          self.W_u = torch.cat((bias_dist.sample((1,N)), self.W_u))
+          self.b_u = bias_dist.sample((1,N))
+          self.b_x = bias_dist.sample((1,N))
+        else: 
+          self.b_u = torch.zeros((1,N))
+          self.b_x = torch.zeros((1,N))
+          #self.W_u = torch.cat((bias_dist.sample((1,N)), self.W_u))
         
         # Rescale recurrent weights to unitry spectral radius 
         max_eig = max(abs(torch.linalg.eigvals(self.W_x)))
@@ -47,12 +52,12 @@ class Reservoir():
         output = torch.zeros((l, self.N))
 
         # Size of U should become L X M + 1
-        if self.bias:
-          U = torch.column_stack((torch.ones(l), U.float()))
+        #if self.bias:
+          #U = torch.column_stack((torch.ones(l), U.float()))
 
         # Iterate over each input timestamp 
         for i in range(l):
-            self.net = torch.matmul(U[i], self.W_u) + torch.matmul( self.X, self.W_x)
+            self.net = torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.X, self.W_x) + self.b_x
             self.X = self.activation(self.net)
             output[i, :] = self.X 
 

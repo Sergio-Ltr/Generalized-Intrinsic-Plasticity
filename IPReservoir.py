@@ -59,7 +59,7 @@ class IPReservoir(Reservoir):
         # Iterate over each input timestamp 
         for i in range(l):
             # Useful to plot neural activity histogram            
-            self.net = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b
+            self.net = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
             
             if save_net: 
                 self.buffer[i, :] = self.net
@@ -94,8 +94,6 @@ class IPReservoir(Reservoir):
         Y = self.activation(self.predict(U, save_gradients=True))
         self.IP_loss = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.target_sample)
         self.loss_history.append(self.IP_loss)
-        
-        print(self.a,self.b)
 
         self.IP_loss.backward(create_graph=True)
 
@@ -105,7 +103,6 @@ class IPReservoir(Reservoir):
         self.a.grad = None
         self.b.grad = None
 
-        print(self.a,self.b)
 
 
     def pre_train_online(self, U, eta):
