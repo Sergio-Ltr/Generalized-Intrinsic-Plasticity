@@ -39,7 +39,9 @@ class Reservoir():
         self.W_x = (self.W_x/max_eig ) * ro_rescale
 
         # Initialize first internal states with zeros.
+        self.Y = torch.zeros(N)
         self.X = torch.zeros(N)
+        
         self.activation = torch.nn.Tanh()
 
 
@@ -57,15 +59,15 @@ class Reservoir():
 
         # Iterate over each input timestamp 
         for i in range(l):
-            self.X = self.activation(torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.X, self.W_x) + self.b_x)
-            output[i, :] = self.X 
+            self.Y = self.activation(torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.Y, self.W_x) + self.b_x)
+            output[i, :] = self.Y
 
         return output
 
     """
     """
     def warm_up(self, U:torch.Tensor): 
-       if self.X.any(): 
+       if self.Y.any(): 
           print('No transient applied. Reservoir was already warmed up') 
           return False
        
@@ -76,7 +78,7 @@ class Reservoir():
     """
     """
     def reset_initial_state(self): 
-       self.X = torch.zeros(self.N)
+       self.Y = torch.zeros(self.N)
 
     """
     

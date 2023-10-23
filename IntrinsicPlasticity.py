@@ -98,14 +98,14 @@ class IPMask:
         if self.areAllGaussian == False:
             return []
         else: 
-            return  torch.tensor(map(lambda dist: dist.mean, self.distributions))
+            return  torch.tensor(list(map(lambda dist: dist.mean, self.distributions)))
     
     # Useful to compute gradients on the fly
     def stds(self):        
         if self.areAllGaussian == False:
             return []
         else: 
-            return  torch.tensor(map(lambda dist: dist.std, self.distributions))
+            return  torch.tensor(list(map(lambda dist: dist.std, self.distributions)))
 
     @staticmethod      
     def normalMask(N): 

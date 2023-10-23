@@ -38,12 +38,12 @@ class IPReservoir(Reservoir):
     """
 
     """
-    def predict(self,  U: torch.Tensor, save_gradients = False, save_net = False): 
+    def predict(self,  U: torch.Tensor, save_gradients = False, save_X = False): 
         # Count number of timesteps to be porocessed.
         l = U.shape[0]
         output = torch.zeros((l, self.N))
 
-        if save_net: 
+        if save_X: 
             self.buffer = torch.zeros((l, self.N))
 
         # Size of U should become [ L X (M + 1) ]
@@ -59,13 +59,13 @@ class IPReservoir(Reservoir):
         # Iterate over each input timestamp 
         for i in range(l):
             # Useful to plot neural activity histogram            
-            net = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
+            self.X = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
             
-            if save_net: 
-                self.buffer[i, :] = net
+            if save_X: 
+                self.buffer[i, :] = self.X
             
-            self.X = self.activation(net)
-            output[i, :] = self.X
+            self.Y = self.activation(self.X)
+            output[i, :] = self.Y
 
         return output
 
@@ -73,11 +73,18 @@ class IPReservoir(Reservoir):
     """
 
     """
-    def pre_train_batch(self, U: torch.Tensor, eta):
+    def pre_train_batch(self, U: torch.Tensor, eta,  transient = 100):
         # If target samples havent't been collected, do it using the target distributions.
         if self.mask == None: 
             print("Error: Unable to train Intrinsic Plasticity without having set any target distribution. Try setting a mask for the reservoir.")
             return 
+        
+        if transient != 0: 
+            warm_up_applied = self.warm_up(U[0:transient])
+
+            if warm_up_applied:
+                U = U[transient:None]
+
         
         if self.target_sample.shape[0] == 0:
             timesteps_number = U.shape[0]
@@ -104,15 +111,38 @@ class IPReservoir(Reservoir):
         self.b.grad = None
 
 
-
-    def pre_train_online(self, U, eta):
+    """"
+     - U : t
+    """
+    def pre_train_online(self, U, eta,  transient = 100):
         if self.mask.areAllGaussian == False:
             print("WARNING: Only target  Gaussian distributions can be learned online. Use batch IP.")
             return 
 
-        #@TODO implement the analytical online version here.  
+        if transient != 0: 
+            warm_up_applied = self.warm_up(U[0:transient])
 
-    
+            if warm_up_applied:
+                U = U[transient:None]
+
+        mu = self.mask.means()
+        sigma = self.mask.stds()
+
+        square_sigma = torch.mul(sigma, sigma)
+
+        # Iterate over each timestep of the input timeseries
+        for U_t in U:
+            # Fed the reservoir withn the current timestep of the input timeseries, 
+            # in order to update the internal states X and Y before applying the online learnin rule. 
+            self.predict(torch.tensor([U_t]),False,False)
+
+            summation = 2*square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
+
+            delta_b = torch.mul(- eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
+            delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
+
+            self.b += delta_b.reshape((self.N))
+            self.a += delta_a.reshape((self.N))
     """
 
     """
