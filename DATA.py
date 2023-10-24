@@ -44,7 +44,7 @@ class TimeseriesDATA:
 
 class NARMA10(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [40, 10, 50]):
-        data = torch.tensor(pd.read_csv('./NARMA10.csv', header=None).to_numpy())
+        data = torch.tensor(pd.read_csv('./DATA/NARMA10.csv', header=None).to_numpy())
 
         self.size = data.shape[1]
 
@@ -57,7 +57,7 @@ class NARMA10(TimeseriesDATA):
     
 class MG17(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [80, 10, 10]) -> None:
-        data = torch.tensor(pd.read_csv('MG17.csv', header=None).T.to_numpy())
+        data = torch.tensor(pd.read_csv('./DATA/MG17.csv', header=None).T.to_numpy())
 
         self.size = data.shape[0]
         

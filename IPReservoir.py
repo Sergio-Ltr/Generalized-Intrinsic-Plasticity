@@ -26,6 +26,7 @@ class IPReservoir(Reservoir):
         #Initialize an empty buffer where data will be further saved for statistics
         self.buffer = None
 
+
     """
     """
     def set_IP_mask(self, mask: IPMask): 
@@ -34,6 +35,16 @@ class IPReservoir(Reservoir):
             return 
         
         self.mask = mask
+
+    def sample_targets(self, timesteps_number, overwrite = False): 
+        if self.target_sample.shape[0] == 0 or overwrite:
+            self.target_sample = self.mask.sample(timesteps_number)
+
+            if self.mask.apply_activation == True: 
+                self.target_sample = self.activation(self.target_sample)
+
+        else:
+            print(f"Target were already sampled for a {timesteps_number} steps long timeseries. To sample again (and eventually change samples length), set the param 'overwrite=True'.") 
 
     """
 
@@ -47,8 +58,8 @@ class IPReservoir(Reservoir):
             self.buffer = torch.zeros((l, self.N))
 
         # Size of U should become [ L X (M + 1) ]
-        if self.bias:
-          U = torch.column_stack((torch.ones(l), U.float()))
+        #if self.bias:
+          #U = torch.column_stack((torch.ones(l), U.float()))
 
         # Start building computational graph if specified
         # such option will be used when collecting activations for batch IP. 
@@ -73,7 +84,7 @@ class IPReservoir(Reservoir):
     """
 
     """
-    def pre_train_batch(self, U: torch.Tensor, eta,  transient = 100):
+    def pre_train_batch(self, U: torch.Tensor, eta, epochs= 10, transient = 100, verbose = False):
         # If target samples havent't been collected, do it using the target distributions.
         if self.mask == None: 
             print("Error: Unable to train Intrinsic Plasticity without having set any target distribution. Try setting a mask for the reservoir.")
@@ -88,33 +99,39 @@ class IPReservoir(Reservoir):
         
         if self.target_sample.shape[0] == 0:
             timesteps_number = U.shape[0]
-            self.mask.sample(timesteps_number)
+            self.target_sample = self.mask.sample(timesteps_number)
 
             if self.mask.apply_activation == True:
-                self.target_sample = F.log_softmax(self.activation(self.mask.samples), dim = 1)
+                #self.target_sample 
+                self.softmax_target_sample = F.log_softmax(self.activation(self.target_sample), dim = 1)
             else: 
-                self.target_sample = F.log_softmax((self.mask.samples), dim = 1)
+                self.softmax_target_sample = F.log_softmax((self.target_sample), dim = 1)
 
             # Save here the evolution of the KL divergence 
             self.loss_history = []
         
-        Y = self.activation(self.predict(U, save_gradients=True))
-        self.IP_loss = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.target_sample)
-        self.loss_history.append(self.IP_loss)
+        for e in range(epochs):
 
-        self.IP_loss.backward(create_graph=True)
+            Y = self.activation(self.predict(U, save_gradients=True))
+            self.IP_loss = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+            self.loss_history.append(self.IP_loss)
 
-        self.a = (self.a - torch.mul(eta, self.a.grad)).clone().detach().requires_grad_(True)
-        self.b = (self.b - torch.mul(eta, self.b.grad )).clone().detach().requires_grad_(True)
+            self.IP_loss.backward(create_graph=True)
 
-        self.a.grad = None
-        self.b.grad = None
+            self.a = (self.a - torch.mul(eta, self.a.grad)).clone().detach().requires_grad_(True)
+            self.b = (self.b - torch.mul(eta, self.b.grad )).clone().detach().requires_grad_(True)
+
+            self.a.grad = None
+            self.b.grad = None
+
+            if verbose: 
+                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}.")
 
 
     """"
      - U : t
     """
-    def pre_train_online(self, U, eta,  transient = 100):
+    def pre_train_online(self, U, eta,  epochs=10, transient = 100, verbose=False):
         if self.mask.areAllGaussian == False:
             print("WARNING: Only target  Gaussian distributions can be learned online. Use batch IP.")
             return 
@@ -130,19 +147,23 @@ class IPReservoir(Reservoir):
 
         square_sigma = torch.mul(sigma, sigma)
 
-        # Iterate over each timestep of the input timeseries
-        for U_t in U:
-            # Fed the reservoir withn the current timestep of the input timeseries, 
-            # in order to update the internal states X and Y before applying the online learnin rule. 
-            self.predict(torch.tensor([U_t]),False,False)
+        for e in range(epochs):
+            # Iterate over each timestep of the input timeseries
+            for U_t in U:
+                # Fed the reservoir withn the current timestep of the input timeseries, 
+                # in order to update the internal states X and Y before applying the online learnin rule. 
+                self.predict(torch.tensor([U_t]),False,False)
 
-            summation = 2*square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
+                summation = 2*square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
 
-            delta_b = torch.mul(- eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
-            delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
+                delta_b = torch.mul(- eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
+                delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
 
-            self.b += delta_b.reshape((self.N))
-            self.a += delta_a.reshape((self.N))
+                self.b += delta_b.reshape((self.N))
+                self.a += delta_a.reshape((self.N))
+
+            if verbose: 
+                print(f" - Epoch: { e + 1}")
     """
 
     """
@@ -167,7 +188,7 @@ class IPReservoir(Reservoir):
         
         for i in range(self.N):
             actual_std, actual_mean = torch.std_mean(self.buffer[:,i] )
-            target_std, target_mean = torch.std_mean(self.mask.samples[:,i])
+            target_std, target_mean = torch.std_mean(self.target_sample[:,i])
             print(f"Unit - ({i + 1}): [ ACTUAL_MEAN == ({actual_mean})  ACTUAL_STD == ({actual_std})][ TARGET_MEAN == ({target_mean}) TARGET_STD == ({target_std})]")
 
         actual_std, actual_mean = torch.std_mean(self.buffer)
@@ -201,7 +222,7 @@ class IPReservoir(Reservoir):
                 x = self.activation(x)
 
             x = x.detach().numpy()
-            y = self.mask.samples[:,i].detach().numpy()
+            y = self.target_sample[:,i].detach().numpy()
 
             xs = np.linspace(y.min(), y.max(), 200)
             ys = np.zeros_like(xs)
@@ -227,7 +248,7 @@ class IPReservoir(Reservoir):
             x = self.activation(x)
 
         x = x.flatten().detach().numpy()
-        y = self.mask.samples.flatten().detach().numpy()
+        y = self.target_sample.flatten().detach().numpy()
 
         xs = np.linspace(y.min(), y.max(), 200)
         ys = np.zeros_like(xs)

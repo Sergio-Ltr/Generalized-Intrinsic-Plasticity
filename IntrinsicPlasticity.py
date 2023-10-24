@@ -87,10 +87,12 @@ class IPMask:
         self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
     def sample(self, timesteps_number): 
-        self.samples = torch.zeros((timesteps_number, self.N))
+        target_samples = torch.zeros((timesteps_number, self.N))
 
         for i in range(self.N): 
-            self.samples[:,i] = self.distributions[i].sample(timesteps_number, 1) 
+            target_samples[:,i] = self.distributions[i].sample(timesteps_number, 1) 
+
+        return target_samples
 
 
     # Useful to compute gradients on the fly

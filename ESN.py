@@ -41,7 +41,7 @@ class Reservoir():
         # Initialize first internal states with zeros.
         self.Y = torch.zeros(N)
         self.X = torch.zeros(N)
-        
+
         self.activation = torch.nn.Tanh()
 
 
