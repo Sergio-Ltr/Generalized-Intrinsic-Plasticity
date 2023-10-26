@@ -168,7 +168,7 @@ class EchoStateNetwork():
     X = self.reservoir.predict(U)[0: None, :]
     ts_len = X.shape[0]
     
-    Y = self.readout.predict(X)
+    Y = self.readout.predict(X).detach()
 
     for tau in range(tau_max):
       mc += MemoryCapacityTau().evaluate(U[0:ts_len -  tau],Y[tau: None])

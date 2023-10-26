@@ -61,8 +61,8 @@ class MG17(TimeseriesDATA):
 
         self.size = data.shape[0]
         
-        self.X_DATA = data[0: -1,:]
-        self.Y_DATA = data[1: None,:]
+        self.X_DATA = data[0: -1,:].flatten()
+        self.Y_DATA = data[1: None,:].flatten()
 
         if split: 
             super().split(percentages)

@@ -79,10 +79,10 @@ Using a mask, hence multiple target distributions (or also optimizing only a sub
 their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
 """
 class IPMask:
-    def __init__(self, distributions : list[IPDistribution], apply_activation = True):
+    def __init__(self, distributions : list[IPDistribution], optimize_X = True):
         self.N = len(distributions)
         self.distributions = distributions
-        self.apply_activation = apply_activation 
+        self.optimize_X = optimize_X 
 
         self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
@@ -111,13 +111,13 @@ class IPMask:
 
     @staticmethod      
     def normalMask(N): 
-        return IPMask([IPDistribution.Normal() for _ in range(N)], apply_activation = False)
+        return IPMask([IPDistribution.Normal() for _ in range(N)], optimize_X = False)
 
     @staticmethod
     def fullBimodalMask(N): 
-        return IPMask([IPDistribution.Bimodal() for _ in range(N)])
+        return IPMask([IPDistribution.Bimodal() for _ in range(N)], optimize_X = True)
 
     @staticmethod
     def mixedBimodalMask(N):
-        return IPMask([IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.58]) for i in range(N)])
+        return IPMask([IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.58]) for i in range(N)], optimize_X = True)
 
