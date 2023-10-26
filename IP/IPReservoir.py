@@ -269,7 +269,7 @@ class IPReservoir(Reservoir):
     """
     
     """
-    def plot_overall_activation_distribution(self):
+    def plot_global_neural_activity(self):
         if self.buffer == None: 
             print("Nothing to print - No activation saved in the buffer")
             return 

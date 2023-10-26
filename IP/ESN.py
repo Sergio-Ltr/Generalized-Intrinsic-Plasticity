@@ -161,7 +161,8 @@ class EchoStateNetwork():
     return metric.evaluate( X = Y, Y = Y_pred)
 
   
-  def MC(self, U: torch.Tensor, tau_max = 100): 
+  def MemoryCapacity(self, U: torch.Tensor, tau_max = 0): 
+    # Take tau as the double of the Reservoir units, according to IP paper. 
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max
     mc = 0
 
