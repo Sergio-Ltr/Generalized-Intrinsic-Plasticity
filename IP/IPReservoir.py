@@ -87,7 +87,7 @@ class IPReservoir(Reservoir):
             self.Y = self.activation(self.X)
             
             if save_states: 
-                self.buffer[i, :] = self.X if self.mask.optimize_X else self.Y
+                self.buffer[i, :] = self.X if self.mask.optimize_X else self.X # Maybe self.Y here?? @TODO check!
             
             output[i, :] = self.Y
 
