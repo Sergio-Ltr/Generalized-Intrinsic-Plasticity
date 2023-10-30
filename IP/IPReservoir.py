@@ -87,7 +87,7 @@ class IPReservoir(Reservoir):
             self.Y = self.activation(self.X)
             
             if save_states: 
-                self.buffer[i, :] = self.X if self.mask.optimize_X else self.X # Maybe self.Y here?? @TODO check!
+                self.buffer[i, :] = self.X #if self.mask.optimize_X else self.X # Maybe self.Y here?? @TODO check!
             
             output[i, :] = self.Y
 
@@ -179,7 +179,7 @@ class IPReservoir(Reservoir):
 
                 summation = 2 * square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
 
-                delta_b = torch.mul(- eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
+                delta_b = torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
                 delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
 
                 self.b += delta_b.reshape((self.N))

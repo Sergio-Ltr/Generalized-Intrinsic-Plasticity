@@ -29,18 +29,19 @@ Normalized Root of Mean Square Error
 """
 class NRMSE(Metric): 
     def evaluate(self, X: torch.Tensor, Y: torch.Tensor):
-        return math.sqrt(torch.mul(torch.norm(X - Y, 2), 1/torch.norm(Y,2)))
+        return math.sqrt(torch.mul(X - Y)**2/torch.norm(Y,2))
         
 """
 Mean Squared Error 
 """
 class MSE(Metric):
     def evaluate(self, X: torch.Tensor, Y: torch.Tensor): 
-        return float(torch.norm(X - Y, 2)/X.shape[0])
+        #return float(torch.norm(X - Y, 2)/X.shape[0])
+        return torch.mean((X - Y)**2) 
 
 """
 Mean Error
 """
 class ME(Metric): 
     def evaluate(self, X: torch.Tensor, Y: torch.Tensor): 
-        return  float(torch.norm(X - Y, 1)/X.shape[0])
+        return  torch.mean(X - Y)

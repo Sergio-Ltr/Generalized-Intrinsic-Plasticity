@@ -1,5 +1,6 @@
 import torch
 import pandas as pd
+from sklearn.linear_model import Ridge
 from Metrics import Metric, NRMSE, MemoryCapacityTau
 
 class Reservoir():
@@ -103,8 +104,13 @@ class Readout():
     self.trained = False
 
   def train(self, X: torch.Tensor, Y: torch.Tensor, lambda_thikonov=0):
-    input_size = X.shape[0]
-    N = X.shape[1]
+    clf = Ridge(alpha=lambda_thikonov)
+    clf.fit(X.detach().numpy(), Y.detach().numpy())
+    self.clf = clf
+
+    """
+    input_size = X.shape[1]
+    N = X.shape[0]
 
     X = torch.column_stack((torch.ones(input_size), X))
     correlation_matrix = torch.matmul(torch.transpose(X,0,1), X)
@@ -114,13 +120,15 @@ class Readout():
 
     ## @TODO revrite this
     self.W = torch.matmul(torch.matmul(torch.linalg.inv(correlation_matrix), torch.transpose(X,0,1)), Y.float())
+    """
     self.trained = True
 
 
   def predict(self, X: torch.Tensor):
     if self.trained:
       # @TODO maybe the shape of output tensor should be transposed.  
-      return torch.matmul(torch.column_stack((X, torch.ones( X.shape[0]))), self.W)
+      return self.clf.predict(X.detach().numpy())
+      #torch.matmul(torch.column_stack((X, torch.ones( X.shape[0]))), self.W)
     else:
       print("Readout not trained - unable to perform any inference.");
       return
@@ -152,7 +160,7 @@ class EchoStateNetwork():
     Y_pred: torch.Tensor = self.readout.predict(X)
 
     if plot == True:
-      Y_pred_df = pd.DataFrame(Y_pred.detach().numpy())
+      Y_pred_df = pd.DataFrame(Y_pred)
       Y_truth_df = pd.DataFrame(Y.numpy())
 
       ax = Y_truth_df.plot(grid=True, label='Target', style=['g-','bo-','y^-'], linewidth=0.5, )
