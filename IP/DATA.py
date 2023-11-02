@@ -67,5 +67,28 @@ class MG17(TimeseriesDATA):
         if split: 
             super().split(percentages)
 
+
+class MC_UNIFORM(TimeseriesDATA):
+    def __init__(self, l=200, max_delay = 100, range=(-0.5, 0.5)):
+        # super().__init__()
+        uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
+        self.l = l
+        self.max_delay = max_delay
+        self.X_FULL = uniform_dist.sample((l + max_delay,1)).squeeze()
+
+        self.delay_timeseries(0)
+
+    def delay_timeseries(self, new_delay, desired_l = 0 ):
+        self.tau = new_delay
+
+        self.Y_DATA = self.X_FULL[new_delay: None] 
+        self.X_DATA = self.X_FULL[0: self.l + self.max_delay - new_delay]
+ 
+
+
+
+
+
+
     
 

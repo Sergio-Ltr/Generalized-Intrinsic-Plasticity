@@ -104,7 +104,7 @@ class IPReservoir(Reservoir):
             return 
         
         if transient != 0: 
-            warm_up_applied = self.warm_up(U[0:transient])
+            warm_up_applied = self.warm_up(U[0:transient], verbose)
 
             if warm_up_applied:
                 U = U[transient:None]
@@ -179,8 +179,8 @@ class IPReservoir(Reservoir):
 
                 summation = 2 * square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
 
-                delta_b = torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
-                delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
+                delta_b = - torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
+                delta_a = - torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
 
                 self.b += delta_b.reshape((self.N))
                 self.a += delta_a.reshape((self.N))

@@ -1,7 +1,8 @@
 import torch
 import pandas as pd
 from sklearn.linear_model import Ridge
-from Metrics import Metric, NRMSE, MemoryCapacityTau
+from DATA import MC_UNIFORM
+from Metrics import Metric, NRMSE, TauMemoryCapacity
 
 class Reservoir():
     """
@@ -67,9 +68,10 @@ class Reservoir():
 
     """
     """
-    def warm_up(self, U:torch.Tensor): 
+    def warm_up(self, U:torch.Tensor, verbose = False): 
        if self.Y.any(): 
-          print('No transient applied. Reservoir was already warmed up') 
+          if verbose:
+            print('No transient applied. Reservoir was already warmed up') 
           return False
        
        self.predict(U)
@@ -139,15 +141,13 @@ class EchoStateNetwork():
     self.reservoir = reservoir     
     self.readout = Readout()
 
-  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 100): 
+  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 100, verbose = True): 
     if transient != 0: 
       warm_up_applied = self.reservoir.warm_up(U[0:transient])
 
       if warm_up_applied:
         U = U[transient:None]
-        Y = Y[transient:None]  
-
-      print(Y.shape)
+        Y = Y[transient:None]
 
     X = self.reservoir.predict(U)
     self.readout.train(X, Y, lambda_thikonov) 
@@ -156,8 +156,7 @@ class EchoStateNetwork():
     if self.readout.trained == False: 
       return
     
-    X = self.reservoir.predict(U)
-    Y_pred: torch.Tensor = self.readout.predict(X)
+    Y_pred = self.predict(U)
 
     if plot == True:
       Y_pred_df = pd.DataFrame(Y_pred)
@@ -168,19 +167,30 @@ class EchoStateNetwork():
 
     return metric.evaluate( X = Y, Y = Y_pred)
 
+  def predict(self, U:torch.Tensor ): 
+    if self.readout.trained == False: 
+      return
+    
+    X = self.reservoir.predict(U)
+    return torch.Tensor(self.readout.predict(X)).detach()
   
-  def MemoryCapacity(self, U: torch.Tensor, tau_max = 0): 
+  def MemoryCapacity(self, l = 200, tau_max = 100, lambda_thikonov = 0): 
     # Take tau as the double of the Reservoir units, according to IP paper. 
-    tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max
+    tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max 
+    data = MC_UNIFORM(l,tau_max)
     mc = 0
 
-    X = self.reservoir.predict(U)[0: None, :]
-    ts_len = X.shape[0]
-    
-    Y = self.readout.predict(X).detach()
-
     for tau in range(tau_max):
-      mc += MemoryCapacityTau().evaluate(U[0:ts_len -  tau],Y[tau: None])
+      data.delay_timeseries(tau)
+
+      U = data.X_DATA
+      
+      # Should I actually retrain each time? 
+      self.train(U, data.Y_DATA,lambda_thikonov, verbose=False)
+
+      Y = self.predict(U)
+
+      mc += TauMemoryCapacity().evaluate(U, Y)
 
     return mc
      

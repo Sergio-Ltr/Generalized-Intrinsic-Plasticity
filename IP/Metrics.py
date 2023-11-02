@@ -1,7 +1,7 @@
 import math
 import torch
 import numpy as np
-
+import pandas as pd
 
 """
 """
@@ -17,19 +17,18 @@ MemoryCapacity-Tau (Univariate)
 
 @TODO can it be implemented for multivariate signals??
 """
-class MemoryCapacityTau(Metric): 
+class TauMemoryCapacity(Metric): 
     def evaluate(self, U_tau: torch.Tensor, Y: torch.Tensor):
-        corr = torch.corrcoef(torch.stack((U_tau, Y)).reshape(2, Y.shape[0]))
-        r =  np.diag(np.fliplr(corr))[0]
-        return  r*r
-    
+        # cov = (torch.cov(torch.stack((X_MC, torch.tensor(Y_MC))).view(2,X_MC.shape[0]), correction=0)[0,1])**2
+        cov = pd.Series(U_tau.numpy()).cov(pd.Series(Y.numpy()))**2
+        return cov/(torch.var(U_tau)*torch.var(Y))
        
 """
 Normalized Root of Mean Square Error
 """
 class NRMSE(Metric): 
     def evaluate(self, X: torch.Tensor, Y: torch.Tensor):
-        return math.sqrt(torch.mul(X - Y)**2/torch.norm(Y,2))
+        return math.sqrt(torch.sum((X - Y)**2)/torch.norm(Y,2))
         
 """
 Mean Squared Error 
