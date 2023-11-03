@@ -13,8 +13,8 @@ class IPReservoir(Reservoir):
     """
     
     """
-    def __init__(self,  M = 1, N = 10, sparsity=0, ro_rescale = 1, W_range = (-2.5, 2.5), bias = False, bias_range = (-1,1), mask: IPMask = None):  
-        super().__init__(M, N, sparsity, ro_rescale, W_range, bias, bias_range)
+    def __init__(self,  M = 1, N = 10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), bias = False, bias_range = (-1,1), input_scaling=1, mask: IPMask = None):  
+        super().__init__(M, N, sparsity, ro_rescale, W_range, bias, bias_range, input_scaling)
         
         if mask != None:
             self.set_IP_mask(mask)
@@ -180,10 +180,10 @@ class IPReservoir(Reservoir):
                 summation = 2 * square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
 
                 delta_b = - torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
-                delta_a = - torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
+                delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
 
-                self.b += delta_b.reshape((self.N))
-                self.a += delta_a.reshape((self.N))
+                self.b -= delta_b.reshape((self.N))
+                self.a -= delta_a.reshape((self.N))
 
             self.IP_loss = self.kl_log_loss(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
             self.loss_history.append(self.IP_loss)

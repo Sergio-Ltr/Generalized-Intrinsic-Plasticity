@@ -8,7 +8,8 @@ class Reservoir():
     """
     
     """
-    def __init__(self, M=1, N=10, sparsity=0, ro_rescale = 1, W_range = (-2.5, 2.5), bias = True, bias_range = (-1,1)):
+    def __init__(self, M=1, N=10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), 
+                 bias = True, bias_range = (-1,1), input_scaling = 1):
         # Number of input features
         self.M = M
         
@@ -25,14 +26,14 @@ class Reservoir():
 
         # Sample input weights randomly (linear bias are absorbed inside here). 
         w_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
-        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0)
+        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0) * input_scaling
 
         if bias: 
           bias_dist = torch.distributions.uniform.Uniform(bias_range[0], bias_range[1])
-          self.b_u = bias_dist.sample((1,N))
+          self.b_u = bias_dist.sample((1,N)) * input_scaling
           self.b_x = bias_dist.sample((1,N))
         else: 
-          self.b_u = torch.zeros((1,N))
+          self.b_u = torch.zeros((1,N)) * input_scaling
           self.b_x = torch.zeros((1,N))
           #self.W_u = torch.cat((bias_dist.sample((1,N)), self.W_u))
         
@@ -141,6 +142,7 @@ class EchoStateNetwork():
     self.reservoir = reservoir     
     self.readout = Readout()
 
+
   def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 100, verbose = True): 
     if transient != 0: 
       warm_up_applied = self.reservoir.warm_up(U[0:transient])
@@ -151,6 +153,7 @@ class EchoStateNetwork():
 
     X = self.reservoir.predict(U)
     self.readout.train(X, Y, lambda_thikonov) 
+
 
   def evaluate(self, U: torch.Tensor, Y: torch.Tensor, metric: Metric = NRMSE(), plot = False):
     if self.readout.trained == False: 
@@ -167,6 +170,7 @@ class EchoStateNetwork():
 
     return metric.evaluate( X = Y, Y = Y_pred)
 
+
   def predict(self, U:torch.Tensor ): 
     if self.readout.trained == False: 
       return
@@ -174,6 +178,7 @@ class EchoStateNetwork():
     X = self.reservoir.predict(U)
     return torch.Tensor(self.readout.predict(X)).detach()
   
+
   def MemoryCapacity(self, l = 200, tau_max = 100, lambda_thikonov = 0): 
     # Take tau as the double of the Reservoir units, according to IP paper. 
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max 
