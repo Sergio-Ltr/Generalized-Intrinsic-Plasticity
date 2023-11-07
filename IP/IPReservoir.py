@@ -170,6 +170,9 @@ class IPReservoir(Reservoir):
 
         square_sigma = torch.mul(sigma, sigma)
 
+        self.a_history = [] 
+        self.b_history = []
+
         for e in range(epochs):
             # Iterate over each timestep of the input timeseries
             for U_t in U:
@@ -182,8 +185,11 @@ class IPReservoir(Reservoir):
                 delta_b = - torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
                 delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
 
-                self.b -= delta_b.reshape((self.N))
-                self.a -= delta_a.reshape((self.N))
+                self.b += delta_b.reshape((self.N))
+                self.a += delta_a.reshape((self.N))
+
+                self.a_history.append([self.a, delta_a])         
+                self.b_history.append([self.b, delta_b])
 
             self.IP_loss = self.kl_log_loss(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
             self.loss_history.append(self.IP_loss)
