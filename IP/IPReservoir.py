@@ -147,11 +147,15 @@ class IPReservoir(Reservoir):
 
             self.IP_loss.backward(create_graph=True)
 
-            self.a = (self.a - torch.mul(eta, self.a.grad)).clone().detach().requires_grad_(True)
-            self.b = (self.b - torch.mul(eta, self.b.grad )).clone().detach().requires_grad_(True)
-
+            self.a = (self.a - torch.mul(eta, self.a.grad)).detach()
+            self.b = (self.b - torch.mul(eta, self.b.grad )).detach()
+            
             self.a.grad = None
             self.b.grad = None
+
+            self.a.requires_grad = False
+            self.a.requires_grad = False
+
 
             if verbose: 
                 print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}.")
