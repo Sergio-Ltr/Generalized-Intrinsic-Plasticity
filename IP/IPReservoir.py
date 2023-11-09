@@ -201,6 +201,9 @@ class IPReservoir(Reservoir):
             if verbose: 
                 print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}.")
    
+    def LCE(self, U): 
+        return super().LCE(U, self.a)
+
     """
 
     """

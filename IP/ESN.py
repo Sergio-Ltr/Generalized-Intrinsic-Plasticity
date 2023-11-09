@@ -1,5 +1,7 @@
 import torch
 import pandas as pd
+import numpy as np
+from scipy.fft import fft, ifft
 from sklearn.linear_model import Ridge
 from DATA import MC_UNIFORM
 from Metrics import Metric, NRMSE, TauMemoryCapacity
@@ -101,6 +103,24 @@ class Reservoir():
         print(torch.view_as_real(torch.linalg.eigvals(self.W_x)))
 
 
+    def non_linearity_rate(sample_len = 2000, freq=1000): 
+        sine_wave = np.sin(2 * np.pi * (np.arange(sample_len) / freq))
+        return
+    
+    def LCE(self, U: torch.Tensor, a = 1):
+      eig_acc = 0
+      W_rec = self.W_x * a
+      N_s = U.shape[0]
+
+      for t in range(N_s):
+          self.predict(torch.Tensor(U[t:t+1]))
+          D = torch.diag(1 - self.Y**2).numpy()
+          eig_k, _ = np.linalg.eig(D*W_rec.numpy())
+          eig_acc += np.log(np.absolute(eig_k))
+
+      return max(eig_acc/N_s)
+     
+
 
 class Readout():
   def __init__(self):
@@ -198,9 +218,6 @@ class EchoStateNetwork():
       mc += TauMemoryCapacity().evaluate(U, Y)
 
     return mc
-     
-  """
-  @TODO Implement
-  """   
-  def lyapunov_exponents(): 
-    pass 
+  
+
+
