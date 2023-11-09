@@ -107,6 +107,9 @@ class Reservoir():
         sine_wave = np.sin(2 * np.pi * (np.arange(sample_len) / freq))
         return
     
+    """
+    Lyapunov characteristic exponent, computed according to Gallicchio et al. in the paper "Local Lyapunov Exponent of Deep Echo State Networks". 
+    """
     def LCE(self, U: torch.Tensor, a = 1):
       eig_acc = 0
       W_rec = self.W_x * a
@@ -119,7 +122,31 @@ class Reservoir():
           eig_acc += np.log(np.absolute(eig_k))
 
       return max(eig_acc/N_s)
-     
+    
+    """
+    Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
+    """
+    def de_fi(self, samples = 1000):
+      """
+      
+      """ 
+      f_range = np.arange(10, 500)*(samples/1000)
+      f_range = f_range[::int(np.ceil( len(f_range) / 100 ))]
+      de_fi_acc = 0
+
+      for f in f_range:
+          x = np.arange(samples)
+          y = np.sin(2 * np.pi * x / f)
+
+          y_hat = fft(self.predict(y).numpy())
+          y_mean = np.mean(y_hat, axis=1)
+
+          e_tot = np.sum(y_hat**2)
+          e_fc = y_mean[int(f)]**2
+          
+          de_fi_acc += 1 - (e_fc/e_tot)
+          
+      return de_fi_acc/len(f_range)     
 
 
 class Readout():
