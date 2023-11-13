@@ -63,7 +63,7 @@ class IPDistribution():
         return IPDistribution.Gaussian([0.0, 1.0])
 
     @staticmethod
-    def Bimodal(params = ([-0.92, 0.92], [0.58, 0.58])):  
+    def Bimodal(params = ([-0.92, 0.92], [0.46, 0.46])):  
         return IPDistribution(IPDistributionType.BIMODAL, params)
 
     @staticmethod

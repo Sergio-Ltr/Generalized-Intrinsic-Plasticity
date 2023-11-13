@@ -21,7 +21,7 @@ class TauMemoryCapacity(Metric):
     def evaluate(self, U_tau: torch.Tensor, Y: torch.Tensor):
         # cov = (torch.cov(torch.stack((X_MC, torch.tensor(Y_MC))).view(2,X_MC.shape[0]), correction=0)[0,1])**2
         cov = pd.Series(U_tau.numpy()).cov(pd.Series(Y.numpy()))**2
-        return cov/(torch.var(U_tau)*torch.var(Y))
+        return cov/torch.var(Y)
        
 """
 Normalized Root of Mean Square Error

@@ -20,7 +20,7 @@ class TimeseriesDATA:
                 idx = int(p * self.size/total) + prev_idx
                 X_chunks.append(self.X_DATA[prev_idx: idx])
                 Y_chunks.append(self.Y_DATA[prev_idx: idx])
-                prev_idx
+                prev_idx = idx
 
             self.X_TR, self.X_VAL, self.X_TS = tuple(X_chunks)
             self.Y_TR, self.Y_VAL, self.Y_TS = tuple(Y_chunks)
@@ -69,7 +69,7 @@ class MG17(TimeseriesDATA):
 
 
 class MC_UNIFORM(TimeseriesDATA):
-    def __init__(self, l=200, max_delay = 100, range=(-0.5, 0.5)):
+    def __init__(self, l=6000, max_delay = 100, range=(-0.8, 0.8)):
         # super().__init__()
         uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
         self.l = l

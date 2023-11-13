@@ -14,15 +14,16 @@ class IPReservoir(Reservoir):
     
     """
     def __init__(self,  M = 1, N = 10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), bias = False, bias_range = (-1,1), input_scaling=1, mask: IPMask = None):  
+
+        # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
+        # a tensor with the same number of elements can be sampled from the target distribution.
+        self.a = torch.ones(N, requires_grad = False)
+        self.b = torch.zeros(N, requires_grad = False)
+
         super().__init__(M, N, sparsity, ro_rescale, W_range, bias, bias_range, input_scaling)
         
         if mask != None:
             self.set_IP_mask(mask)
-
-        # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
-        # a tensor with the same number of elements can be sampled from the target distribution.
-        self.a = torch.ones(self.N, requires_grad = False)
-        self.b = torch.zeros(self.N, requires_grad = False)
 
         # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
         self.kl_log_loss = torch.nn.KLDivLoss(reduction="sum", log_target = True)
@@ -248,13 +249,26 @@ class IPReservoir(Reservoir):
     """
 
     """
-    def print_eigs(self):
-        print("Eigenvalues of the non scaled weights") 
-        super().print_eigs()
+    def print_eigs(self, scaled = True):
+        if not scaled:
+            print("Eigenvalues of the non scaled weights") 
+            return super().print_eigs()
+        else:
+            print("Eigenvalues of the scaled weights")
+            return torch.view_as_real(torch.linalg.eigvals(torch.matmul(self.W_x,  torch.diag(self.a))))
 
-        print("Eigenvalues of the scaled weights")
-        print(torch.view_as_real(torch.linalg.eigvals(torch.matmul(self.W_x,  torch.diag(self.a)))))
 
+    def max_eigs(self,  scaled = True):
+        if not scaled:
+            return super().max_eigs()
+        else:
+            return max(abs(torch.linalg.eigvals((torch.matmul(self.W_x,  torch.diag(self.a))))))
+        
+    
+    def rescale_weights(self, ro_rescale = 0.96, scale_ip =True, verbose = False): 
+        if verbose:
+          print(f"Rescaling reccurent weight from their current spetral radius of {self.max_eigs()} to {ro_rescale}")
+        self.W_x = (self.W_x/self.max_eigs(scale_ip) ) * ro_rescale
 
     """
     

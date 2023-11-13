@@ -40,8 +40,9 @@ class Reservoir():
           #self.W_u = torch.cat((bias_dist.sample((1,N)), self.W_u))
         
         # Rescale recurrent weights to unitry spectral radius 
-        max_eig = max(abs(torch.linalg.eigvals(self.W_x)))
-        self.W_x = (self.W_x/max_eig ) * ro_rescale
+        self.rescale_weights(ro_rescale)
+        #max_eig = max(abs(torch.linalg.eigvals(self.W_x)))
+        #self.W_x = (self.W_x/max_eig ) * ro_rescale
 
         # Initialize first internal states with zeros.
         self.Y = torch.zeros(N)
@@ -100,13 +101,23 @@ class Reservoir():
     
     """
     def print_eigs(self):
+        print(f"Maximum absolute value of the eignevalue of the reccurent weight matrix: { max(abs(torch.linalg.eigvals(self.W_x)))}")
         print(torch.view_as_real(torch.linalg.eigvals(self.W_x)))
 
 
-    def non_linearity_rate(sample_len = 2000, freq=1000): 
-        sine_wave = np.sin(2 * np.pi * (np.arange(sample_len) / freq))
-        return
+    """
+
+    """
+    def max_eigs(self):
+        return max(abs(torch.linalg.eigvals(self.W_x)))
     
+    """
+    """
+    def rescale_weights(self, ro_rescale = 0.96, verbose = False): 
+        if verbose:
+          print(f"Rescaling reccurent weight from their current spetral radius of {self.max_eigs()} to {ro_rescale}")
+        self.W_x = (self.W_x/self.max_eigs() ) * ro_rescale
+
     """
     Lyapunov characteristic exponent, computed according to Gallicchio et al. in the paper "Local Lyapunov Exponent of Deep Echo State Networks". 
     """
@@ -192,7 +203,11 @@ class EchoStateNetwork():
 
   def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov, transient = 100, verbose = True): 
     if transient != 0: 
+      self.reservoir.reset_initial_state()
       warm_up_applied = self.reservoir.warm_up(U[0:transient])
+      
+      if verbose: 
+         print(f"Reservoir warmed up with the first {transient} time steps")
 
       if warm_up_applied:
         U = U[transient:None]
@@ -200,6 +215,8 @@ class EchoStateNetwork():
 
     X = self.reservoir.predict(U)
     self.readout.train(X, Y, lambda_thikonov) 
+
+    return self.readout.predict(X)
 
 
   def evaluate(self, U: torch.Tensor, Y: torch.Tensor, metric: Metric = NRMSE(), plot = False):
@@ -226,23 +243,25 @@ class EchoStateNetwork():
     return torch.Tensor(self.readout.predict(X)).detach()
   
 
-  def MemoryCapacity(self, l = 200, tau_max = 100, lambda_thikonov = 0): 
+  def MemoryCapacity(self, l = 6000, tau_max = 100, lambda_thikonov = 0): 
     # Take tau as the double of the Reservoir units, according to IP paper. 
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max 
     data = MC_UNIFORM(l,tau_max)
     mc = 0
+    sigma_U = torch.var(data.X_DATA)
 
     for tau in range(tau_max):
+      
       data.delay_timeseries(tau)
 
       U = data.X_DATA
       
       # Should I actually retrain each time? 
-      self.train(U, data.Y_DATA,lambda_thikonov, verbose=False)
+      self.train(U, data.Y_DATA, lambda_thikonov, verbose=False)
 
       Y = self.predict(U)
 
-      mc += TauMemoryCapacity().evaluate(U, Y)
+      mc += TauMemoryCapacity().evaluate(U, Y)/sigma_U
 
     return mc
   
