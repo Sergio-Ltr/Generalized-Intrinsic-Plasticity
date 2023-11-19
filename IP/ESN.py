@@ -6,6 +6,7 @@ from sklearn.linear_model import Ridge
 from DATA import MC_UNIFORM
 from Metrics import Metric, NRMSE, TauMemoryCapacity
 
+
 class Reservoir():
     """
     
@@ -243,27 +244,42 @@ class EchoStateNetwork():
     return torch.Tensor(self.readout.predict(X)).detach()
   
 
-  def MemoryCapacity(self, l = 6000, tau_max = 100, lambda_thikonov = 0): 
+  def MemoryCapacity(self, l = 6000, tau_max = 100, lambda_thikonov = 0, TR_SIZE = 5000, TS_SIZE = 1000): 
     # Take tau as the double of the Reservoir units, according to IP paper. 
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max 
     data = MC_UNIFORM(l,tau_max)
     mc = 0
-    sigma_U = torch.var(data.X_DATA)
+    #sigma_U = torch.var(data.X_DATA)
 
     for tau in range(tau_max):
       
       data.delay_timeseries(tau)
+      data.split([TR_SIZE, 0 ,TS_SIZE]) 
 
-      U = data.X_DATA
+      U_TR, Y_TR = data.TR()
+      U_TS, Y_TS = data.TS()
+
+      self.train(U_TR, Y_TR, lambda_thikonov, transient=100, verbose=False)
+
+      X_TS = self.predict(U_TS)
+
+      target_mean = np.mean(Y_TS.numpy())
+      output_mean = np.mean(X_TS.numpy()) 
       
-      # Should I actually retrain each time? 
-      self.train(U, data.Y_DATA, lambda_thikonov, verbose=False)
+      num, denom_t, denom_out = 0, 0, 0
 
-      Y = self.predict(U)
+      for i in range(TS_SIZE):
+          deviat_t = Y_TS[i] - target_mean
+          deviat_out = X_TS[i] - output_mean
+          num += deviat_t * deviat_out
+          denom_t += deviat_t**2
+          denom_out += deviat_out**2
+      num = num**2
+      den = denom_t * denom_out
+      mc += num/den
 
-      mc += TauMemoryCapacity().evaluate(U, Y)/sigma_U
+      #MC[k] = num/den
+      #mc += TauMemoryCapacity().evaluate(U_TS, Y_TS)/sigma_U
 
     return mc
   
-
-

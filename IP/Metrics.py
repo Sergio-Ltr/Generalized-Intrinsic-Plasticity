@@ -2,6 +2,7 @@ import math
 import torch
 import numpy as np
 import pandas as pd
+from sklearn.metrics import r2_score
 
 """
 """
@@ -19,9 +20,15 @@ MemoryCapacity-Tau (Univariate)
 """
 class TauMemoryCapacity(Metric): 
     def evaluate(self, U_tau: torch.Tensor, Y: torch.Tensor):
-        # cov = (torch.cov(torch.stack((X_MC, torch.tensor(Y_MC))).view(2,X_MC.shape[0]), correction=0)[0,1])**2
+        """
         cov = pd.Series(U_tau.numpy()).cov(pd.Series(Y.numpy()))**2
         return cov/torch.var(Y)
+        """
+        return r2_score(U_tau, Y)
+
+        
+
+
        
 """
 Normalized Root of Mean Square Error

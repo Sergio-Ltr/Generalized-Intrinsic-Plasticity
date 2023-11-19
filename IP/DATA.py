@@ -69,20 +69,20 @@ class MG17(TimeseriesDATA):
 
 
 class MC_UNIFORM(TimeseriesDATA):
-    def __init__(self, l=6000, max_delay = 100, range=(-0.8, 0.8)):
+    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8)):
         # super().__init__()
         uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
-        self.l = l
+        self.size = size
         self.max_delay = max_delay
-        self.X_FULL = uniform_dist.sample((l + max_delay,1)).squeeze()
+        self.X_FULL = uniform_dist.sample((size + max_delay,1)).squeeze()
 
         self.delay_timeseries(0)
 
-    def delay_timeseries(self, new_delay, desired_l = 0 ):
+    def delay_timeseries(self, new_delay):
         self.tau = new_delay
 
-        self.Y_DATA = self.X_FULL[new_delay: None] 
-        self.X_DATA = self.X_FULL[0: self.l + self.max_delay - new_delay]
+        self.Y_DATA = self.X_FULL[0: self.size]
+        self.X_DATA = self.X_FULL[new_delay: self.size + new_delay] 
  
 
 
