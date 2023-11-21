@@ -139,26 +139,35 @@ class Reservoir():
     Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
     """
     def de_fi(self, samples = 1000):
-      """
       
-      """ 
-      f_range = np.arange(10, 500)*(samples/1000)
-      f_range = f_range[::int(np.ceil( len(f_range) / 100 ))]
       de_fi_acc = 0
+      f_range = np.linspace(0.01, 0.5, num=101)*500
+      f_range = f_range[0:-1]
+
+      starttime = 0.0
+      endtime = 2.0
+      steps = 1000
+      t = np.linspace(starttime, endtime, num=steps)
 
       for f in f_range:
-          x = np.arange(samples)
-          y = np.sin(2 * np.pi * x / f)
+          y = np.sin(2 * np.pi * int(f) * t)
 
-          y_hat = fft(self.predict(y).numpy())
-          y_mean = np.mean(y_hat, axis=1)
+          y_res = self.predict(y).numpy()
+          self.reset_initial_state()
 
-          e_tot = np.sum(y_hat**2)
-          e_fc = y_mean[int(f)]**2
-          
-          de_fi_acc += 1 - (e_fc/e_tot)
-          
-      return de_fi_acc/len(f_range)     
+          dc = np.mean(y_res, axis=0 )
+          y_res = y_res - dc
+
+          fhat = np.fft.fft(np.mean(y_res, axis = 1))
+          N = len(fhat)
+          halvedfhat = fhat[0:int(N/2)]
+          powspec = abs(halvedfhat)**2
+
+          e_tot = np.sum(powspec)
+          de_fi = 1 - powspec[int(f)*2]/e_tot
+          de_fi_acc += de_fi
+
+      print(de_fi_acc/len(f_range))
 
 
 class Readout():
