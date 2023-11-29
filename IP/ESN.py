@@ -12,7 +12,7 @@ class Reservoir():
     
     """
     def __init__(self, M=1, N=10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), 
-                 bias = True, bias_range = (-1,1), input_scaling = 1):
+                 bias = True, bias_range = (-1,1), input_scaling = 1, activation = torch.nn.Tanh()):
         # Number of input features
         self.M = M
         
@@ -49,7 +49,7 @@ class Reservoir():
         self.Y = torch.zeros(N)
         self.X = torch.zeros(N)
 
-        self.activation = torch.nn.Tanh()
+        self.activation = activation
 
 
     """
