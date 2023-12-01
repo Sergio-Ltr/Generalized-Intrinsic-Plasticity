@@ -1,6 +1,7 @@
 import torch
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.fft import fft, ifft
 from sklearn.linear_model import Ridge
 from DATA import MC_UNIFORM
@@ -138,37 +139,39 @@ class Reservoir():
     """
     Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
     """
-    def de_fi(self, samples = 1000):
-      
-      de_fi_acc = 0
-      f_range = np.linspace(0.01, 0.5, num=101)*500
-      f_range = f_range[0:-1]
-
-      starttime = 0.0
-      endtime = 2.0
-      steps = 1000
+    def de_fi(self, verbose = False, plot=False, theta_range=(np.linspace(0.01, 0.5, 100)*200).astype(int),   starttime = 0.0, endtime = 2.0, steps = 1000):
+      de_acc = 0
       t = np.linspace(starttime, endtime, num=steps)
+      
+      for theta in theta_range:
 
-      for f in f_range:
-          y = np.sin(2 * np.pi * int(f) * t)
+        f = np.sin(2*np.pi*theta*t) 
 
-          y_res = self.predict(y).numpy()
-          self.reset_initial_state()
+        f_res = self.predict(f).numpy()
+        f_res -= np.mean(f_res, axis=0)
+        f_res = np.mean(f_res, axis=1)
 
-          dc = np.mean(y_res, axis=0 )
-          y_res = y_res - dc
+        fhat = np.fft.fft(f_res)
+        N = len(fhat)
+        halvedfhat = fhat[0:int(N/2)]
+        powspec = abs(halvedfhat)**2
 
-          fhat = np.fft.fft(np.mean(y_res, axis = 1))
-          N = len(fhat)
-          halvedfhat = fhat[0:int(N/2)]
-          powspec = abs(halvedfhat)**2
+        fs = steps/(endtime - starttime)
 
-          e_tot = np.sum(powspec)
-          de_fi = 1 - powspec[int(f)*2]/e_tot
-          de_fi_acc += de_fi
+        freq = np.linspace(0,int(fs/2),int(N/2))
 
-      print(de_fi_acc/len(f_range))
+        de_fi_theta = 1 - powspec[2*theta]/np.sum(powspec)
 
+        if verbose: 
+          print(f"Frequence:{theta}, Deviation: {de_fi_theta},  Powerspect: {powspec[2*theta]}, Total Energy: {np.sum(powspec)}") 
+
+        if plot:
+          plt.plot(freq,powspec)
+          plt.xlim([0,100])
+
+        de_acc += de_fi_theta
+
+      return de_acc/len(theta_range)
 
 class Readout():
   def __init__(self):
