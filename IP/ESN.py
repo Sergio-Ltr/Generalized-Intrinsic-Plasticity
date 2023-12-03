@@ -30,7 +30,7 @@ class Reservoir():
 
         # Sample input weights randomly (linear bias are absorbed inside here). 
         w_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
-        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0) * input_scaling
+        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0) * input_scaling # TODO add feature selection parameter (W-U sparsity)
 
         if bias: 
           bias_dist = torch.distributions.uniform.Uniform(bias_range[0], bias_range[1])
@@ -113,6 +113,7 @@ class Reservoir():
     def max_eigs(self):
         return max(abs(torch.linalg.eigvals(self.W_x)))
     
+    
     """
     """
     def rescale_weights(self, ro_rescale = 0.96, verbose = False): 
@@ -120,10 +121,16 @@ class Reservoir():
           print(f"Rescaling reccurent weight from their current spetral radius of {self.max_eigs()} to {ro_rescale}")
         self.W_x = (self.W_x/self.max_eigs() ) * ro_rescale
 
+
     """
     Lyapunov characteristic exponent, computed according to Gallicchio et al. in the paper "Local Lyapunov Exponent of Deep Echo State Networks". 
     """
-    def LCE(self, U: torch.Tensor, a = 1):
+    def LCE(self, U: torch.Tensor, a = 1, transient = 100):
+      self.reset_initial_state()
+      self.warm_up(U[0:transient])
+
+      U = U[transient:None]
+
       eig_acc = 0
       W_rec = self.W_x * a
       N_s = U.shape[0]
@@ -139,7 +146,7 @@ class Reservoir():
     """
     Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
     """
-    def de_fi(self, verbose = False, plot=False, theta_range=(np.linspace(0.01, 0.5, 100)*200).astype(int),   starttime = 0.0, endtime = 2.0, steps = 1000):
+    def de_fi(self, verbose = False, plot=False, theta_range=(np.linspace(0.01, 0.5, 100)*200).astype(int), starttime = 0.0, endtime = 2.0, steps = 1000):
       de_acc = 0
       t = np.linspace(starttime, endtime, num=steps)
       

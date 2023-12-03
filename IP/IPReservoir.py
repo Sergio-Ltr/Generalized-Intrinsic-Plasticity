@@ -84,7 +84,7 @@ class IPReservoir(Reservoir):
         # Iterate over each input timestamp 
         for i in range(l):
             # Useful to plot neural activity histogram            
-            self.X = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.X, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
+            self.X = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.Y, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
             self.Y = self.activation(self.X)
             
             if save_states: 
@@ -98,7 +98,7 @@ class IPReservoir(Reservoir):
     """
 
     """
-    def pre_train(self, U: torch.Tensor, eta = 0.000025, epochs = 10, transient = 100, learning_rule = "default", verbose=True): 
+    def pre_train(self, U: torch.Tensor, eta = 0.000025, epochs = 10, transient = 100, learning_rule = "default", verbose=True, debug=False): 
         # Check if any target distribution has been defined.
         if self.mask == None: 
             print("Error: Unable to train Intrinsic Plasticity without having set any target distribution. Try setting a mask for the reservoir.")
@@ -125,7 +125,7 @@ class IPReservoir(Reservoir):
             learning_rule = "online" if self.mask.areAllGaussian else "autodiff"
 
         if learning_rule == "online": 
-            self.pre_train_online(U, eta, epochs, verbose)
+            self.pre_train_online(U, eta, epochs, verbose, debug)
             return
 
         if learning_rule == "autodiff": 
@@ -165,7 +165,7 @@ class IPReservoir(Reservoir):
     """"
     
     """
-    def pre_train_online(self, U, eta = 0.000025,  epochs = 10, verbose=False):
+    def pre_train_online(self, U, eta = 0.000025,  epochs = 10, verbose=False, debug=False):
         if self.mask.areAllGaussian == False:
             print("WARNING: Only target  Gaussian distributions can be learned online. Use batch IP.")
             return 
@@ -179,11 +179,17 @@ class IPReservoir(Reservoir):
         self.b_history = []
 
         for e in range(epochs):
+            i = 0
             # Iterate over each timestep of the input timeseries
             for U_t in U:
                 # Fed the reservoir withn the current timestep of the input timeseries, 
                 # in order to update the internal states X and Y before applying the online learnin rule. 
                 self.predict(torch.tensor([U_t]),False,False)
+                
+                if debug: 
+                    i += 1
+                    print(f"------------------- Timestep: {i} ----------------------")
+                    print(f"a:{self.a} - b: {self.b} - U: {U_t} - X: {self.X} - Y:{self.Y}")
 
                 summation = 2 * square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
 
@@ -195,6 +201,10 @@ class IPReservoir(Reservoir):
 
                 self.a_history.append([self.a, delta_a])         
                 self.b_history.append([self.b, delta_b])
+
+                if debug: 
+                    print(f"a:{self.a} - b: {self.b} -  X: {self.X} - Y:{self.Y}")
+                    print(f"Summation:{summation} - De_a: {delta_a} - De_b: {delta_b}")
 
             self.IP_loss = self.kl_log_loss(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
             self.loss_history.append(self.IP_loss)

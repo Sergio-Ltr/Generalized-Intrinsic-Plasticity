@@ -122,5 +122,5 @@ class IPMask:
         return IPMask([IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.58]) for i in range(N)], optimize_X = True)
 
     @staticmethod
-    def trimodal(N, linear_rate):
+    def trimodal(N, linear_rate=(1/3)):
         return IPMask([IPDistribution.Gaussian([0.0, 0.25]) if i < N*linear_rate else IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.25]) for i in range(N)], optimize_X=False)
