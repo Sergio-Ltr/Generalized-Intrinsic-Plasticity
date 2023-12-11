@@ -78,17 +78,30 @@ class MC_UNIFORM(TimeseriesDATA):
 
         self.delay_timeseries(0)
 
-    def delay_timeseries(self, new_delay):
-        self.tau = new_delay
+    def delay_timeseries(self, tau):
+        self.tau = tau
 
         self.Y_DATA = self.X_FULL[0: self.size]
-        self.X_DATA = self.X_FULL[new_delay: self.size + new_delay] 
+        self.X_DATA = self.X_FULL[tau: self.size + tau] 
  
 
+class VerstraetenDambre(MC_UNIFORM): 
+    def __init__(self, p =1, size=6000, max_delay = 100):
+        self.p = p
+        super().__init__(size, max_delay, range=(-0.8, 0.8))
+
+    def delay_timeseries(self, tau): 
+        R_DATA = [ self.X_FULL[i]*self.X_FULL[i + 1] for i in range(0, self.size)]
+        self.Y_DATA = [np.sign(r)*(np.abs(r)**self.p) for r in R_DATA]
+        self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1] 
 
 
+class InubushiErgodic(MC_UNIFORM):
+    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8)):
+        super().__init__(size, max_delay, range)
 
+    def delay_timeseries(self, ni, tau): 
+        self.Y_DATA = np.sin(np.array(self.X_FULL[0: self.size])*ni)
+        self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1]     
 
-
-    
 
