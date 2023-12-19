@@ -135,6 +135,10 @@ class IPReservoir(Reservoir):
         print(f"Error: No learnin rule corresponding to '{learning_rule}'. Try using  learning_rule = 'online'  if target distributions are all Gaussian, otherwise try using  learning_rule = 'autodiff.")
 
 
+    def KL(self, U: torch.Tensor):
+        Y = self.activation(self.predict(U, save_gradients=False))
+        return self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+
     """
 
     """
@@ -210,7 +214,7 @@ class IPReservoir(Reservoir):
             self.loss_history.append(self.IP_loss)
 
             if verbose: 
-                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}.")
+                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.max_eigs()}")
    
     def LCE(self, U): 
         return super().LCE(U, self.a)
