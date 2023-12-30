@@ -26,7 +26,7 @@ class IPReservoir(Reservoir):
             self.set_IP_mask(mask)
 
         # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
-        self.kl_log_loss = torch.nn.KLDivLoss(reduction="sum", log_target = True)
+        self.kl_log_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
 
         # We will need to sample from the target distribution.
         self.target_sample = torch.tensor([])
@@ -136,8 +136,9 @@ class IPReservoir(Reservoir):
 
 
     def KL(self, U: torch.Tensor):
-        Y = self.activation(self.predict(U, save_gradients=False))
-        return self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+        Y = self.predict(U, save_gradients=False)
+        self.kl_value = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+        return self.kl_value
 
     """
 
@@ -146,9 +147,10 @@ class IPReservoir(Reservoir):
         
         for e in range(epochs):
 
-            Y = self.activation(self.predict(U, save_gradients=True))
+            Y = self.predict(U, save_gradients=True)
             self.IP_loss = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
-            self.loss_history.append(self.IP_loss)
+            self.kl_value = self.IP_loss.detach().flatten()
+            self.loss_history.append(self.kl_value)
 
             self.IP_loss.backward(create_graph=True)
 
@@ -211,7 +213,8 @@ class IPReservoir(Reservoir):
                     print(f"Summation:{summation} - De_a: {delta_a} - De_b: {delta_b}")
 
             self.IP_loss = self.kl_log_loss(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
-            self.loss_history.append(self.IP_loss)
+            self.kl_value = self.IP_loss.detach().flatten()
+            self.loss_history.append(self.kl_value)
 
             if verbose: 
                 print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.max_eigs()}")
@@ -317,7 +320,7 @@ class IPReservoir(Reservoir):
         
         x = self.buffer
 
-        x = x.flatten().detach().numpy()
+        x = self.activation(x).flatten().detach().numpy()
         y = self.target_sample.flatten().detach().numpy()
 
         xs = np.linspace(y.min(), y.max(), 500)
@@ -329,3 +332,45 @@ class IPReservoir(Reservoir):
         plt.xlabel("x")
         plt.ylabel("f(x)")
         plt.show()
+
+    #
+    def adversarial_pre_train(self, U: torch.Tensor, eta = 0.000025, epochs = 10, transient = 100, desired_rho = 0.96, learning_rule = "default", verbose=True, debug=False): 
+        prev_kl = float('inf')
+        rho = 0
+        delta_KL = 0
+        delta_rho = 0
+
+        for i in range(epochs):
+            # Check ESC to decide wheather to use a positive or negative eta 
+
+            print(f"eta = {eta}")
+            self.pre_train(U, eta , 1, transient, learning_rule, verbose, debug)
+            rho_i = self.max_eigs()
+            KL_i = self.IP_loss.item()
+
+            delta_rho = rho - rho_i 
+            delta_KL = prev_kl - KL_i
+
+            if (abs(delta_rho) < 0.005) or (abs(delta_KL) < 0.005):
+                if verbose: 
+                    print(f"Algorithm stopped for poor learning. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
+                break
+
+            if rho > 2.5:
+                print("Rolling back last epoch")
+                eta = eta if rho < 1 else -eta
+                self.pre_train(U, eta, 1, transient, learning_rule, verbose, debug) 
+                eta = - eta/2
+            
+            eta = eta/2 if delta_KL < 0 else eta
+            
+            prev_kl = KL_i
+            rho = rho_i
+
+
+        if abs(rho - desired_rho) > 2.5 or rho >= 1: 
+            self.rescale_weights(desired_rho) 
+
+
+
+        

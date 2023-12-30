@@ -24,7 +24,7 @@ class Reservoir():
         self.bias = bias
 
         # Sample recurrent weights from a uniform distribution.
-        unitary_dist = torch.distributions.uniform.Uniform(-1, 1)
+        unitary_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
         # Regulate sparsity using the dropout function (weird but effective)
         self.W_x = torch.nn.functional.dropout(unitary_dist.sample((N, N)), sparsity) 
 
@@ -74,8 +74,8 @@ class Reservoir():
 
     """
     """
-    def warm_up(self, U:torch.Tensor, verbose = False): 
-       if self.Y.any(): 
+    def warm_up(self, U:torch.Tensor, force = False, verbose = False): 
+       if self.Y.any() and not force: 
           if verbose:
             print('No transient applied. Reservoir was already warmed up') 
           return False

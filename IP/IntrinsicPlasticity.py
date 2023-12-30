@@ -113,14 +113,18 @@ class IPMask:
     def normalMask(N): 
         return IPMask([IPDistribution.Normal() for _ in range(N)], optimize_X = False)
 
+    @staticmethod      
+    def gaussian(N, std = 0.5, mu = 0.0): 
+        return IPMask([IPDistribution.Gaussian([mu, std]) for _ in range(N)], optimize_X = False)
+
     @staticmethod
     def fullBimodalMask(N): 
         return IPMask([IPDistribution.Bimodal() for _ in range(N)], optimize_X = True)
 
     @staticmethod
-    def mixedBimodalMask(N):
-        return IPMask([IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.58]) for i in range(N)], optimize_X = True)
+    def mixedBimodalMask(N, std = 0.46, mu = 0.92):
+        return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], optimize_X = False)
 
     @staticmethod
-    def trimodal(N, linear_rate=(1/3)):
-        return IPMask([IPDistribution.Gaussian([0.0, 0.6]) if i < N*linear_rate else IPDistribution.Gaussian([-0.92 if i % 2 == 0 else 0.92 ,0.15]) for i in range(N)], optimize_X=False)
+    def trimodal(N, linear_rate=(1/3), std_lin = 0.5, std_bim = 0.15, mu = 0.92, optimize_X = False):
+        return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], optimize_X)
