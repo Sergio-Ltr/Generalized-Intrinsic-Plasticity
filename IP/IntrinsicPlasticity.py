@@ -79,10 +79,10 @@ Using a mask, hence multiple target distributions (or also optimizing only a sub
 their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
 """
 class IPMask:
-    def __init__(self, distributions : list[IPDistribution], optimize_X = True):
+    def __init__(self, distributions : list[IPDistribution], apply_activation = True):
         self.N = len(distributions)
         self.distributions = distributions
-        self.optimize_X = optimize_X 
+        self.apply_activation = apply_activation 
 
         self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
@@ -110,21 +110,21 @@ class IPMask:
             return  torch.tensor(list(map(lambda dist: dist.std, self.distributions)))
 
     @staticmethod      
-    def normalMask(N): 
-        return IPMask([IPDistribution.Normal() for _ in range(N)], optimize_X = False)
+    def normalMask(N, apply_activation = False): 
+        return IPMask([IPDistribution.Normal() for _ in range(N)], apply_activation)
 
     @staticmethod      
-    def gaussian(N, std = 0.5, mu = 0.0): 
-        return IPMask([IPDistribution.Gaussian([mu, std]) for _ in range(N)], optimize_X = False)
+    def gaussian(N, std = 0.5, mu = 0.0, apply_activation= False): 
+        return IPMask([IPDistribution.Gaussian([mu, std]) for _ in range(N)], apply_activation)
 
     @staticmethod
-    def fullBimodalMask(N): 
-        return IPMask([IPDistribution.Bimodal() for _ in range(N)], optimize_X = True)
+    def fullBimodalMask(N, apply_activation = False): 
+        return IPMask([IPDistribution.Bimodal() for _ in range(N)], apply_activation)
 
     @staticmethod
-    def mixedBimodalMask(N, std = 0.46, mu = 0.92):
-        return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], optimize_X = False)
+    def mixedBimodalMask(N, std = 0.46, mu = 0.92, apply_activation = False):
+        return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], apply_activation)
 
     @staticmethod
-    def trimodal(N, linear_rate=(1/3), std_lin = 0.5, std_bim = 0.15, mu = 0.92, optimize_X = False):
-        return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], optimize_X)
+    def trimodal(N, linear_rate=(1/3), std_lin = 0.5, std_bim = 0.15, mu = 0.92, apply_activation = False):
+        return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], apply_activation)

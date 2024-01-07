@@ -55,7 +55,7 @@ class IPReservoir(Reservoir):
         if self.target_sample.shape[0] == 0 or overwrite:
             self.target_sample = self.mask.sample(timesteps_number)
 
-            if self.mask.optimize_X == True: 
+            if self.mask.apply_activation == False: 
                 self.softmax_target_sample = F.log_softmax(self.target_sample, dim = 1)
             else: 
                 self.softmax_target_sample = F.log_softmax(self.activation(self.target_sample), dim = 1)
@@ -88,7 +88,7 @@ class IPReservoir(Reservoir):
             self.Y = self.activation(self.X)
             
             if save_states: 
-                self.buffer[i, :] = self.X #if self.mask.optimize_X else self.X # Maybe self.Y here?? @TODO check!
+                self.buffer[i, :] = self.X #if self.mask.apply_activation else self.X # Maybe self.Y here?? @TODO check!
             
             output[i, :] = self.Y
 
@@ -313,15 +313,22 @@ class IPReservoir(Reservoir):
     """
     
     """
-    def plot_global_neural_activity(self):
+    def plot_global_neural_activity(self, apply_activation_X = True, apply_activation_Y=False):
         if self.buffer == None: 
             print("Nothing to print - No activation saved in the buffer")
             return 
         
         x = self.buffer
+        y = self.target_sample
 
-        x = self.activation(x).flatten().detach().numpy()
-        y = self.target_sample.flatten().detach().numpy()
+        if apply_activation_X: 
+            x = self.activation(x)
+
+        if apply_activation_Y: 
+            y = self.activation(y)
+
+        x = x.flatten().detach().numpy()
+        y = y.flatten().detach().numpy()
 
         xs = np.linspace(y.min(), y.max(), 500)
         ys = np.zeros_like(xs)
@@ -334,43 +341,50 @@ class IPReservoir(Reservoir):
         plt.show()
 
     #
-    def adversarial_pre_train(self, U: torch.Tensor, eta = 0.000025, epochs = 10, transient = 100, desired_rho = 0.96, learning_rule = "default", verbose=True, debug=False): 
+    def safe_mode_pre_train(self, U: torch.Tensor, eta = 0.000025, max_epochs = 25, max_rho =1,  transient = 100, learning_rule = "default", verbose=True, debug=False): 
         prev_kl = float('inf')
         rho = 0
-        delta_KL = 0
-        delta_rho = 0
+        rolled_back = False
+        poor_learning = False
 
-        for i in range(epochs):
+        for i in range(max_epochs):
             # Check ESC to decide wheather to use a positive or negative eta 
+            if verbose:
+                print(f"Epoch: {i}) - Safe mode traning - Learning Rate = {eta}")
 
-            print(f"eta = {eta}")
-            self.pre_train(U, eta , 1, transient, learning_rule, verbose, debug)
+            self.pre_train(U, eta = eta , epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
             rho_i = self.max_eigs()
             KL_i = self.IP_loss.item()
 
-            delta_rho = rho - rho_i 
-            delta_KL = prev_kl - KL_i
-
-            if (abs(delta_rho) < 0.005) or (abs(delta_KL) < 0.005):
+            if rho_i >= max_rho: # Rollback!
                 if verbose: 
-                    print(f"Algorithm stopped for poor learning. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
-                break
+                    print(f"Too high spectral radius: {rho_i}, rolling back to previous state!")
 
-            if rho > 2.5:
-                print("Rolling back last epoch")
-                eta = eta if rho < 1 else -eta
-                self.pre_train(U, eta, 1, transient, learning_rule, verbose, debug) 
-                eta = - eta/2
-            
-            eta = eta/2 if delta_KL < 0 else eta
-            
-            prev_kl = KL_i
-            rho = rho_i
+                self.pre_train(U, eta = -eta*1.25, epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
+                rolled_back = True
+                eta = eta/4
+            else:
+                delta_rho = rho - rho_i 
+                delta_KL = prev_kl - KL_i if prev_kl != float('inf') else KL_i
 
+                if (abs(delta_rho) < 0.005) or (abs(delta_KL) < 0.005):
 
-        if abs(rho - desired_rho) > 2.5 or rho >= 1: 
-            self.rescale_weights(desired_rho) 
+                    if (rolled_back and poor_learning):
+                        if verbose: 
+                            print(f"Algorithm stopped for poor learning. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
+                        break
 
+                    if (poor_learning): 
+                        eta = 2*eta
+                        if verbose: 
+                            print(f"Algorithm learning very slowly. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
+                            print(f"Trying doubling eta: {eta}")
+    
+                    poor_learning = True
 
+                else:
+                    # Otherwise, if everything is stable and learning is still happening, simply iterate!        
+                    poor_learning = False
+                    rolled_back = False
 
         

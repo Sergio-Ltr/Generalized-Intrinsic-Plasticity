@@ -44,7 +44,7 @@ class TimeseriesDATA:
 
 class NARMA10(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [40, 10, 50]):
-        data = torch.tensor(pd.read_csv('./../../ESN-IP/DATA/NARMA10.csv', header=None).to_numpy())
+        data = torch.tensor(pd.read_csv('./../../../ESN-IP/DATA/NARMA10.csv', header=None).to_numpy())
 
         self.size = data.shape[1]
 
@@ -57,7 +57,7 @@ class NARMA10(TimeseriesDATA):
     
 class MG17(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [80, 10, 10]) -> None:
-        data = torch.tensor(pd.read_csv('./../../ESN-IP/DATA/MG17.csv', header=None).T.to_numpy())
+        data = torch.tensor(pd.read_csv('./../../../ESN-IP/DATA/MG17.csv', header=None).T.to_numpy())
 
         self.size = data.shape[0]
         
@@ -69,7 +69,7 @@ class MG17(TimeseriesDATA):
 
 
 class MC_UNIFORM(TimeseriesDATA):
-    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8)):
+    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
         # super().__init__()
         uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
         self.size = size
@@ -77,6 +77,9 @@ class MC_UNIFORM(TimeseriesDATA):
         self.X_FULL = uniform_dist.sample((size + max_delay,1)).squeeze()
 
         self.delay_timeseries(0)
+
+        if split: 
+            super().split(percentages)
 
     def delay_timeseries(self, tau):
         self.tau = tau
@@ -86,22 +89,25 @@ class MC_UNIFORM(TimeseriesDATA):
  
 
 class VerstraetenDambre(MC_UNIFORM): 
-    def __init__(self, p =1, size=6000, max_delay = 100):
+    def __init__(self, p = 1, size=5000, max_delay = 100, split = True, percentages = [80, 0, 20]):
         self.p = p
-        super().__init__(size, max_delay, range=(-0.8, 0.8))
+        range = (-0.8, 0.8)
+        
+        super().__init__(size, max_delay, range, split, percentages)
 
     def delay_timeseries(self, tau): 
         R_DATA = [ self.X_FULL[i]*self.X_FULL[i + 1] for i in range(0, self.size)]
-        self.Y_DATA = [np.sign(r)*(np.abs(r)**self.p) for r in R_DATA]
+        self.Y_DATA = torch.Tensor([np.sign(r)*(np.abs(r)**self.p) for r in R_DATA])
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1] 
 
 
 class InubushiErgodic(MC_UNIFORM):
-    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8)):
-        super().__init__(size, max_delay, range)
+    def __init__(self, size=5000, ni=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
+        self.ni = ni
+        super().__init__(size, max_delay, range, split, percentages)
 
-    def delay_timeseries(self, ni, tau): 
-        self.Y_DATA = np.sin(np.array(self.X_FULL[0: self.size])*ni)
+    def delay_timeseries(self, tau): 
+        self.Y_DATA = torch.Tensor(np.sin(np.array(self.X_FULL[0: self.size])*self.ni))
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1]     
 
 
