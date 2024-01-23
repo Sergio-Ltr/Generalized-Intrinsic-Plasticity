@@ -12,8 +12,8 @@ class Reservoir():
     """
     
     """
-    def __init__(self, M=1, N=10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), 
-                 bias = True, bias_range = (-1,1), input_scaling = 1, activation = torch.nn.Tanh()):
+    def __init__(self, M=1, N=10, ro_rescale = 1, W_range = (-1, 1), 
+                 bias = True, bias_range = (-1,1), input_scaling = 1, activation = torch.nn.Tanh(), U_sparsity=0,  X_sparsity=0):
         # Number of input features
         self.M = M
         
@@ -26,11 +26,11 @@ class Reservoir():
         # Sample recurrent weights from a uniform distribution.
         unitary_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
         # Regulate sparsity using the dropout function (weird but effective)
-        self.W_x = torch.nn.functional.dropout(unitary_dist.sample((N, N)), sparsity) 
+        self.W_x = torch.nn.functional.dropout(unitary_dist.sample((N, N)), U_sparsity) 
 
         # Sample input weights randomly (linear bias are absorbed inside here). 
         w_dist = torch.distributions.uniform.Uniform(W_range[0], W_range[1])
-        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), 0) * input_scaling # TODO add feature selection parameter (W-U sparsity)
+        self.W_u = torch.nn.functional.dropout(w_dist.sample((M, N)), X_sparsity) * input_scaling # TODO add feature selection parameter (W-U sparsity)
 
         if bias: 
           bias_dist = torch.distributions.uniform.Uniform(bias_range[0], bias_range[1])
@@ -180,6 +180,15 @@ class Reservoir():
 
       return de_acc/len(theta_range)
 
+
+    """
+    Effective dimension 
+    """
+    def EffectiveDimension(self): 
+      state_eigs = torch.linalg.eigvals(self.Y)
+      return (torch.sum(state_eigs)**2)/torch.sum(state_eigs**2) 
+
+
 class Readout():
   def __init__(self):
     self.trained = False
@@ -263,7 +272,7 @@ class EchoStateNetwork():
     return torch.Tensor(self.readout.predict(X)).detach()
   
 
-  def MemoryCapacity(self, l = 6000, tau_max = 100, lambda_thikonov = 0, TR_SIZE = 5000, TS_SIZE = 1000): 
+  def MemoryCapacity(self, l = 6000, tau_max = 0, lambda_thikonov = 0, TR_SIZE = 5000, TS_SIZE = 1000): 
     # Take tau as the double of the Reservoir units, according to IP paper. 
     tau_max = self.reservoir.N * 2 if tau_max == 0 else tau_max 
     data = MC_UNIFORM(l,tau_max)
@@ -277,7 +286,8 @@ class EchoStateNetwork():
 
       U_TR, Y_TR = data.TR()
       U_TS, Y_TS = data.TS()
-
+      
+      self.reservoir.reset_initial_state()
       self.train(U_TR, Y_TR, lambda_thikonov, transient=100, verbose=False)
 
       X_TS = self.predict(U_TS)

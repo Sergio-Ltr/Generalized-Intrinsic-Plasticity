@@ -13,14 +13,15 @@ class IPReservoir(Reservoir):
     """
     
     """
-    def __init__(self,  M = 1, N = 10, sparsity=0, ro_rescale = 1, W_range = (-1, 1), bias = False, bias_range = (-1,1), input_scaling=1, mask: IPMask = None):  
+    def __init__(self,  M = 1, N = 10, ro_rescale = 1, W_range = (-1, 1), bias = False, bias_range = (-1,1), input_scaling=1, X_sparsity=0, U_sparsity=0, 
+ mask: IPMask = None):  
 
         # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
         # a tensor with the same number of elements can be sampled from the target distribution.
         self.a = torch.ones(N, requires_grad = False)
         self.b = torch.zeros(N, requires_grad = False)
 
-        super().__init__(M, N, sparsity, ro_rescale, W_range, bias, bias_range, input_scaling)
+        super().__init__(M, N, ro_rescale, W_range, bias, bias_range, input_scaling, U_sparsity=U_sparsity, X_sparsity=X_sparsity)
         
         if mask != None:
             self.set_IP_mask(mask)
