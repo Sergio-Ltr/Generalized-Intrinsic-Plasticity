@@ -79,7 +79,7 @@ Using a mask, hence multiple target distributions (or also optimizing only a sub
 their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
 """
 class IPMask:
-    def __init__(self, distributions : list[IPDistribution], apply_activation = True):
+    def __init__(self, distributions : [IPDistribution], apply_activation = True):
         self.N = len(distributions)
         self.distributions = distributions
         self.apply_activation = apply_activation 

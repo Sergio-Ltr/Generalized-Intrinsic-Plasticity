@@ -2,7 +2,7 @@ import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.fft import fft, ifft
+from scipy.fftpack import fft, ifft
 from sklearn.linear_model import Ridge
 from DATA import MC_UNIFORM
 from Metrics import Metric, NRMSE, TauMemoryCapacity
@@ -12,8 +12,7 @@ class Reservoir():
     """
     
     """
-    def __init__(self, M=1, N=10, ro_rescale = 1, W_range = (-1, 1), 
-                 bias = True, bias_range = (-1,1), input_scaling = 1, activation = torch.nn.Tanh(), U_sparsity=0,  X_sparsity=0):
+    def __init__(self, M=1, N=10, ro_rescale = 1, W_range = (-1, 1), bias = True, bias_range = (-1,1), input_scaling = 1, activation = torch.nn.Tanh(), U_sparsity=0,  X_sparsity=0):
         # Number of input features
         self.M = M
         
@@ -75,19 +74,19 @@ class Reservoir():
     """
     """
     def warm_up(self, U:torch.Tensor, force = False, verbose = False): 
-       if self.Y.any() and not force: 
+      if self.Y.any() and not force: 
           if verbose:
             print('No transient applied. Reservoir was already warmed up') 
           return False
-       
-       self.predict(U)
-       return True
+
+      self.predict(U)
+      return True
 
       
     """
     """
     def reset_initial_state(self): 
-       self.Y = torch.zeros(self.N)
+      self.Y = torch.zeros(self.N)
 
     """
     
@@ -179,14 +178,13 @@ class Reservoir():
         de_acc += de_fi_theta
 
       return de_acc/len(theta_range)
-
-
-    """
-    Effective dimension 
-    """
-    def EffectiveDimension(self): 
-      state_eigs = torch.linalg.eigvals(self.Y)
-      return (torch.sum(state_eigs)**2)/torch.sum(state_eigs**2) 
+    
+    
+    def EffectiveDimension(self, U: torch.tensor, transient = 0):
+      self.reset_initial_state()
+      activation_covariance = np.cov(self.predict(U)[transient:None].T) #building the covariance matrix
+      eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
+      return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
 
 
 class Readout():
@@ -236,7 +234,7 @@ class EchoStateNetwork():
       warm_up_applied = self.reservoir.warm_up(U[0:transient])
       
       if verbose: 
-         print(f"Reservoir warmed up with the first {transient} time steps")
+        print(f"Reservoir warmed up with the first {transient} time steps")
 
       if warm_up_applied:
         U = U[transient:None]
@@ -312,3 +310,5 @@ class EchoStateNetwork():
 
     return mc
   
+
+    
