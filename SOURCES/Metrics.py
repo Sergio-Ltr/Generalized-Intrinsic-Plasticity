@@ -26,7 +26,7 @@ class TauMemoryCapacity(Metric):
         """
         return r2_score(U_tau, Y)
 
-       
+
 """
 Normalized Root of Mean Square Error
 """
@@ -43,6 +43,13 @@ class MSE(Metric):
         return torch.mean((X - Y)**2) 
 
 """
+Mean Absolute Error
+"""
+class MAE(Metric): 
+    def evaluate(self, X: torch.Tensor, Y: torch.Tensor): 
+        return  torch.mean(abs(X - Y))
+
+"""
 Mean Error
 """
 class ME(Metric): 
@@ -50,3 +57,4 @@ class ME(Metric):
         return  torch.mean(X - Y)
     
 
+class MC()
