@@ -68,8 +68,8 @@ class MG17(TimeseriesDATA):
             super().split(percentages)
 
 
-class MC_UNIFORM(TimeseriesDATA):
-    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
+class UNIFORM(TimeseriesDATA):
+    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [5000, 0, 1000]):
         # super().__init__()
         uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
         self.size = size
@@ -88,7 +88,7 @@ class MC_UNIFORM(TimeseriesDATA):
         self.X_DATA = self.X_FULL[tau: self.size + tau] 
  
 
-class VerstraetenDambre(MC_UNIFORM): 
+class VerstraetenDambre(UNIFORM): 
     def __init__(self, p = 1, size=5000, max_delay = 100, split = True, percentages = [80, 0, 20]):
         self.p = p
         range = (-0.8, 0.8)
@@ -101,7 +101,7 @@ class VerstraetenDambre(MC_UNIFORM):
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1] 
 
 
-class InubushiErgodic(MC_UNIFORM):
+class InubushiErgodic(UNIFORM):
     def __init__(self, size=5000, ni=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
         self.ni = ni
         super().__init__(size, max_delay, range, split, percentages)

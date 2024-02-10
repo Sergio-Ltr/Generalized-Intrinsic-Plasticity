@@ -1,9 +1,6 @@
 import torch
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.fftpack import fft, ifft
-from sklearn.linear_model import Ridge
 
 
 class Reservoir():
@@ -137,48 +134,5 @@ class Reservoir():
 
       return max(eig_acc/N_s)
     
-    """
-    Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
-    """
-    def de_fi(self, verbose = False, plot=False, theta_range=(np.linspace(0.01, 0.5, 100)*200).astype(int), starttime = 0.0, endtime = 2.0, steps = 1000):
-      de_acc = 0
-      t = np.linspace(starttime, endtime, num=steps)
-      
-      for theta in theta_range:
-
-        f = np.sin(2*np.pi*theta*t) 
-
-        f_res = self.predict(f).numpy()
-        f_res -= np.mean(f_res, axis=0)
-        f_res = np.mean(f_res, axis=1)
-
-        fhat = np.fft.fft(f_res)
-        N = len(fhat)
-        halvedfhat = fhat[:N/2]
-        powspec = abs(halvedfhat)**2
-
-        fs = steps/(endtime - starttime)
-
-        freq = np.linspace(0,fs/2,N/2)
-
-        de_fi_theta = 1 - powspec[2*theta]/np.sum(powspec)
-
-        if verbose: 
-          print(f"Frequence:{theta}, Deviation: {de_fi_theta},  Powerspect: {powspec[2*theta]}, Total Energy: {np.sum(powspec)}") 
-
-        if plot:
-          plt.plot(freq,powspec)
-          plt.xlim([0,100])
-
-        de_acc += de_fi_theta
-
-      return de_acc/len(theta_range)
     
     
-    def EffectiveDimension(self, U: torch.tensor, transient = 0):
-      self.reset_initial_state()
-      activation_covariance = np.cov(self.predict(U)[transient:None].T) #building the covariance matrix
-      eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
-      return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
-
-
