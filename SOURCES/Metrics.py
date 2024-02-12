@@ -2,13 +2,11 @@ import math
 import torch
 import numpy as np
 import pandas as pd
-from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
-from sklearn.linear_model import Ridge
 
 from Reservoir import Reservoir
-from ESN import Readout, EchoStateNetwork
+from ESN import EchoStateNetwork
 from DATA import UNIFORM, TimeseriesDATA
 
 """
@@ -28,21 +26,34 @@ class EstrinsicMetric(Metric):
     def __init__(self):
         super().__init__()
 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False): 
         pass
+
+    def fitting_plot(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+        Y_pred_df = pd.DataFrame(Y_pred.numpy())
+        Y_truth_df = pd.DataFrame(Y.numpy())
+    
+        ax = Y_truth_df.plot(grid=True, legend='Target', style=['g-','bo-','y^-'], linewidth=0.5 )
+        Y_pred_df.plot(grid=True, legend='Reconstructed', style=['r--','bo-','y^-'], linewidth=0.25, ax=ax)
     
 """
 Normalized Root of Mean Square Error
 """
 class NRMSE(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
-        return math.sqrt(torch.sum((Y_pred - Y)**2)/torch.norm(Y,2))
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
+        if plot: 
+            self.fitting_plot(Y_pred, Y)
+
+        return math.sqrt(torch.sum((Y_pred - Y)**2)/torch.var(Y))
         
 """
 Mean Squared Error 
 """
 class MSE(EstrinsicMetric):
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
+        if plot: 
+            self.fitting_plot(Y_pred, Y)
+        
         #return float(torch.norm(X - Y, 2)/X.shape[0])
         return torch.mean((Y_pred - Y)**2) 
 
@@ -50,7 +61,10 @@ class MSE(EstrinsicMetric):
 Mean Absolute Error
 """
 class MAE(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
+        if plot: 
+            self.fitting_plot(Y_pred, Y)
+
         return  torch.mean(abs(Y_pred - Y))
 
 
@@ -58,7 +72,10 @@ class MAE(EstrinsicMetric):
 Mean Error
 """
 class ME(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False): 
+        if plot: 
+            self.fitting_plot(Y_pred, Y)
+
         return  torch.mean(Y_pred - Y)
     
 """
@@ -122,10 +139,11 @@ Lyapunov characteristic exponent, computed according to Gallicchio et al. in the
 class MLLE(IntrinsicMetric): 
     def evaluate(self, model: Reservoir, U=UNIFORM(size = 1000, max_delay=0, split = False), transient = 100):
         a = 1 #Contractivity rate, to be implemented in the future.
-        U = U.X_FULL[transient:None]
+        U = U.X_FULL
 
         model.reset_initial_state()      
         model.warm_up(U[:transient])
+        U = U[transient:None]
 
         eig_acc = 0
         W_rec = model.W_x * a
@@ -183,9 +201,10 @@ class DeltaPhi(IntrinsicMetric):
       return de_acc/len(theta_range)
     
 class Neff(IntrinsicMetric): 
-    def evaluate(self, model: Reservoir, U = UNIFORM(split = False) ):
+    def evaluate(self, model: Reservoir, U = UNIFORM(split = False), transient = 0 ):
       model.reset_initial_state()
-      activation_covariance = np.cov(model.predict(U.X_FULL).T) #building the covariance matrix
+      model.warm_up(U.X_FULL[:transient])
+      activation_covariance = np.cov(model.predict(U.X_FULL[transient:None]).T) #building the covariance matrix
       eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
       return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
     
