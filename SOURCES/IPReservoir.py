@@ -219,9 +219,6 @@ class IPReservoir(Reservoir):
 
             if verbose: 
                 print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.max_eigs()}")
-   
-    def LCE(self, U): 
-        return super().LCE(U, self.a)
 
     """
 
@@ -262,8 +259,6 @@ class IPReservoir(Reservoir):
     def printLossCurve(self): 
         #@TODO implement. 
         return self.loss_history
-    
-
     """
 
     """

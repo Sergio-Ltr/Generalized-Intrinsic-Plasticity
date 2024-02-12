@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 
 from Reservoir import Reservoir
+from IPReservoir import IPReservoir
 from ESN import EchoStateNetwork
 from DATA import UNIFORM, TimeseriesDATA
 
@@ -138,7 +139,7 @@ Lyapunov characteristic exponent, computed according to Gallicchio et al. in the
 """
 class MLLE(IntrinsicMetric): 
     def evaluate(self, model: Reservoir, U=UNIFORM(size = 1000, max_delay=0, split = False), transient = 100):
-        a = 1 #Contractivity rate, to be implemented in the future.
+        # @TODO implement deep reservoir variant. 
         U = U.X_FULL
 
         model.reset_initial_state()      
@@ -146,7 +147,7 @@ class MLLE(IntrinsicMetric):
         U = U[transient:None]
 
         eig_acc = 0
-        W_rec = model.W_x * a
+        W_rec = model.W_x * model.a if isinstance(model, IPReservoir) else model.W_x
         N_s = U.shape[0]
 
         for t in range(N_s):
