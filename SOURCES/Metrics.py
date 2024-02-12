@@ -23,10 +23,11 @@ class Metric():
 Subclass grouping metrics requiring external data source to evaluate. 
 """
 class EstrinsicMetric(Metric):
-    def __init__(self):
+    def __init__(self, plot = False):
+        self.plot = plot
         super().__init__()
 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False): 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
         pass
 
     def fitting_plot(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
@@ -40,18 +41,17 @@ class EstrinsicMetric(Metric):
 Normalized Root of Mean Square Error
 """
 class NRMSE(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
-        if plot: 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
+        if self.plot: 
             self.fitting_plot(Y_pred, Y)
-
         return math.sqrt(torch.sum((Y_pred - Y)**2)/torch.var(Y))
         
 """
 Mean Squared Error 
 """
 class MSE(EstrinsicMetric):
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
-        if plot: 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
+        if self.plot: 
             self.fitting_plot(Y_pred, Y)
         
         #return float(torch.norm(X - Y, 2)/X.shape[0])
@@ -61,8 +61,8 @@ class MSE(EstrinsicMetric):
 Mean Absolute Error
 """
 class MAE(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False):
-        if plot: 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
+        if self.plot: 
             self.fitting_plot(Y_pred, Y)
 
         return  torch.mean(abs(Y_pred - Y))
@@ -72,8 +72,8 @@ class MAE(EstrinsicMetric):
 Mean Error
 """
 class ME(EstrinsicMetric): 
-    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor, plot = False): 
-        if plot: 
+    def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
+        if self.plot: 
             self.fitting_plot(Y_pred, Y)
 
         return  torch.mean(Y_pred - Y)
@@ -82,7 +82,7 @@ class ME(EstrinsicMetric):
 Subclass grouping metrics requiring more complex internal procedure than just propagate, train and compare. 
 """
 class IntrinsicMetric(Metric):
-    def __init__(self,  verbose = False, plot = False):
+    def __init__(self,  verbose = False, plot=False):
         self.verbose = verbose
         self.plot = plot
         super().__init__()
@@ -161,15 +161,20 @@ class MLLE(IntrinsicMetric):
 Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
 """
 class DeltaPhi(IntrinsicMetric):
-    def evaluate(self, model: Reservoir):
-      starttime = 0.0
-      endtime = 2.0
-      steps = 1000
-      de_acc = 0
-      t = np.linspace(starttime, endtime, num=steps)
-      theta_range=(np.linspace(0.01, 0.5, 100)*200).astype(int)
+    def __init__(self, verbose=False, plot=False, theta_range = (np.linspace(0.01, 0.5, 100)*200).astype(int), starttime = 0.0, endtime = 2.0, steps = 1000):
+        self.theta_range = theta_range
+        self.starttime = starttime
+        self.endtime = endtime
+        self.steps = steps
+        super().__init__(verbose, plot)
 
-      for theta in theta_range:
+
+    def evaluate(self, model: Reservoir):
+
+      de_acc = 0
+      t = np.linspace(self.starttime, self.endtime, num=self.steps)
+
+      for theta in self.theta_range:
 
         f = np.sin(2*np.pi*theta*t) 
 
@@ -183,7 +188,7 @@ class DeltaPhi(IntrinsicMetric):
         halvedfhat = fhat[:int(N/2)]
         powspec = abs(halvedfhat)**2
 
-        fs = steps/(endtime - starttime)
+        fs = self.steps/(self.endtime - self.starttime)
 
         freq = np.linspace(0,int(fs/2),int(N/2))
 
@@ -198,13 +203,13 @@ class DeltaPhi(IntrinsicMetric):
 
         de_acc += de_fi_theta
 
-      return de_acc/len(theta_range)
+      return de_acc/len(self.theta_range)
     
 class Neff(IntrinsicMetric): 
-    def evaluate(self, model: Reservoir, U = UNIFORM(split = False), transient = 0 ):
+    def evaluate(self, model: Reservoir, U = UNIFORM(split = False).X_FULL, transient = 0 ):
       model.reset_initial_state()
-      model.warm_up(U.X_FULL[:transient])
-      activation_covariance = np.cov(model.predict(U.X_FULL[transient:None]).T) #building the covariance matrix
+      model.warm_up(U[:transient])
+      activation_covariance = np.cov(model.predict(U[transient:None]).T) #building the covariance matrix
       eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
       return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
     
