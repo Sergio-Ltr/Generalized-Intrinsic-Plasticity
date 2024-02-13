@@ -11,22 +11,23 @@ from ESN import EchoStateNetwork
 from DATA import UNIFORM, TimeseriesDATA
 
 """
-Wrapper super class
+  Wrapper super class
 """
 class Metric(): 
-    def __init__(self):
+    def __init__(self, name: str = "Metric"):
+        self.name = name
         super().__init__()
     
     def evaluate(self): 
         pass
 
 """
-Subclass grouping metrics requiring external data source to evaluate. 
+  Subclass grouping metrics requiring external data source to evaluate. 
 """
 class EstrinsicMetric(Metric):
-    def __init__(self, plot = False):
+    def __init__(self, plot = False, name="Estrinsic Metric"):
         self.plot = plot
-        super().__init__()
+        super().__init__(name)
 
     def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
         pass
@@ -39,78 +40,96 @@ class EstrinsicMetric(Metric):
         Y_pred_df.plot(grid=True, legend='Reconstructed', style=['r--','bo-','y^-'], linewidth=0.25, ax=ax)
     
 """
-Normalized Root of Mean Square Error
+  Normalized Root of Mean Square Error
 """
 class NRMSE(EstrinsicMetric): 
+    def __init__(self, plot = False, name="NRMSE"):
+        super().__init__(plot, name)
+
     def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
-        if self.plot: 
+        if self.plot  == True: 
             self.fitting_plot(Y_pred, Y)
         return math.sqrt(torch.sum((Y_pred - Y)**2)/torch.var(Y))
         
 """
-Mean Squared Error 
+  Mean Squared Error 
 """
 class MSE(EstrinsicMetric):
+    def __init__(self, plot = False, name="MSE"):
+        super().__init__(plot, name)
+
     def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
-        if self.plot: 
+        if self.plot == True: 
             self.fitting_plot(Y_pred, Y)
         
         #return float(torch.norm(X - Y, 2)/X.shape[0])
         return torch.mean((Y_pred - Y)**2) 
 
 """
-Mean Absolute Error
+  Mean Absolute Error
 """
 class MAE(EstrinsicMetric): 
+    def __init__(self, plot = False, name="MAE"):
+        super().__init__(plot, name)
+
     def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor):
-        if self.plot: 
+        if self.plot == True: 
             self.fitting_plot(Y_pred, Y)
 
         return  torch.mean(abs(Y_pred - Y))
 
-
 """
-Mean Error
+  Mean Error
 """
 class ME(EstrinsicMetric): 
+    def __init__(self, plot = False, name="ME"):
+        super().__init__(plot, name)
+
     def evaluate(self, Y_pred: torch.Tensor, Y: torch.Tensor): 
-        if self.plot: 
+        if self.plot == True: 
             self.fitting_plot(Y_pred, Y)
 
         return  torch.mean(Y_pred - Y)
     
 """
-Subclass grouping metrics requiring more complex internal procedure than just propagate, train and compare. 
+  Subclass grouping metrics requiring more complex internal procedure than just propagate, train and compare. 
 """
 class IntrinsicMetric(Metric):
-    def __init__(self,  verbose = False, plot=False):
-        self.verbose = verbose
-        self.plot = plot
-        super().__init__()
+    def __init__(self, name="Intrinsic Metric"):
+        super().__init__(name)
     
     def evaluate(self, model: Reservoir): 
         pass 
 
 
+"""
+  Memory Capacity @TODO add reference paper. 
+"""
 class MC(IntrinsicMetric):
-    def evaluate(self, model: Reservoir, U=UNIFORM(size=6000), split_rate= [5000,0, 1000], tau_max = 0, lambda_thikonov = 0):
+    def __init__(self, U=UNIFORM(size=6000), split_rate= [5000,0, 1000], tau_max = 0, lambda_thikonov = 0, name="MC"):
+        self.U = U
+        self.split_rate = split_rate
+        self.tau_max = tau_max
+        self.lambda_thikonov = lambda_thikonov
+        super().__init__(name)
+
+    def evaluate(self, model: Reservoir):
         # def MemoryCapacity(self, l = 6000,  lambda_thikonov = 0, TR_SIZE = 5000, TS_SIZE = 1000): 
         # Take tau as the double of the Reservoir units, according to IP paper. 
-        tau_max = model.N * 2 if tau_max == 0 else tau_max 
+        self.tau_max = model.N * 2 if self.tau_max == 0 else self.tau_max 
         mc = 0
         #sigma_U = torch.var(data.X_DATA)
 
-        for tau in range(tau_max):
-        
-            U.delay_timeseries(tau)
-            U.split(split_rate) 
+        for tau in range(self.tau_max):
+            self.U.delay_timeseries(tau)
+            self.U.split(self.split_rate) 
 
-            U_TR, Y_TR = U.TR()
-            U_TS, Y_TS = U.TS()
+            U_TR, Y_TR = self.U.TR()
+            U_TS, Y_TS = self.U.TS()
             
             model.reset_initial_state()
             esn = EchoStateNetwork(model)
-            esn.train(U_TR, Y_TR, lambda_thikonov, transient=100, verbose=False)
+            esn.train(U_TR, Y_TR, self.lambda_thikonov, transient=100, verbose=False)
 
             X_TS = esn.predict(U_TS)
 
@@ -135,23 +154,26 @@ class MC(IntrinsicMetric):
         return mc
     
 """
-Lyapunov characteristic exponent, computed according to Gallicchio et al. in the paper "Local Lyapunov Exponent of Deep Echo State Networks". 
+  Lyapunov characteristic exponent, computed according to Gallicchio et al. in the paper "Local Lyapunov Exponent of Deep Echo State Networks". 
 """
-class MLLE(IntrinsicMetric): 
-    def evaluate(self, model: Reservoir, U=UNIFORM(size = 1000, max_delay=0, split = False), transient = 100):
-        # @TODO implement deep reservoir variant. 
-        U = U.X_FULL
+class MLLE(IntrinsicMetric):
+    def __init__(self,  U = UNIFORM(size = 1000, max_delay=0, split = False).X_FULL,  transient = 100, name="MLLE", ): 
+        self.U = U
+        self.transient = transient
+        super().__init__(name)
 
+    def evaluate(self, model: Reservoir):
+        # @TODO implement deep reservoir variant. 
         model.reset_initial_state()      
-        model.warm_up(U[:transient])
-        U = U[transient:None]
+        model.warm_up(self.U[:self.transient])
+        self.U = self.U[self.transient:None]
 
         eig_acc = 0
-        W_rec = model.W_x * model.a if isinstance(model, IPReservoir) else model.W_x
-        N_s = U.shape[0]
+        W_rec = model.W_h * model.a if isinstance(model, IPReservoir) else model.W_h
+        N_s = self.U.shape[0]
 
         for t in range(N_s):
-            model.predict(torch.Tensor(U[t:t+1]))
+            model.predict(torch.Tensor(self.U[t:t+1]))
             D = torch.diag(1 - model.Y**2).numpy()
             eig_k, _ = np.linalg.eig(D*W_rec.numpy())
             eig_acc += np.log(np.absolute(eig_k))
@@ -159,19 +181,21 @@ class MLLE(IntrinsicMetric):
         return max(eig_acc/N_s)
     
 """
-Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
+  Deviation from linearity, measure proposed by Verstraeten et al. in the paper "Memory versus Non-Linearity in Reservoirs".
 """
 class DeltaPhi(IntrinsicMetric):
-    def __init__(self, verbose=False, plot=False, theta_range = (np.linspace(0.01, 0.5, 100)*200).astype(int), starttime = 0.0, endtime = 2.0, steps = 1000):
+    def __init__(self, theta_range = (np.linspace(0.01, 0.5, 100)*200).astype(int), starttime = 0.0, endtime = 2.0, steps = 1000, verbose=False, plot=False, name="DeltaPhi"):
         self.theta_range = theta_range
         self.starttime = starttime
         self.endtime = endtime
         self.steps = steps
-        super().__init__(verbose, plot)
+
+        self.verbose = verbose
+        self.plot = plot
+        super().__init__(name)
 
 
     def evaluate(self, model: Reservoir):
-
       de_acc = 0
       t = np.linspace(self.starttime, self.endtime, num=self.steps)
 
@@ -205,35 +229,20 @@ class DeltaPhi(IntrinsicMetric):
         de_acc += de_fi_theta
 
       return de_acc/len(self.theta_range)
-    
+
+"""
+  Number of Effective Dimensions @TODO add reference paper. 
+"""   
 class Neff(IntrinsicMetric): 
-    def evaluate(self, model: Reservoir, U = UNIFORM(split = False).X_FULL, transient = 0 ):
+    def __init__(self, U = UNIFORM(split = False).X_FULL, transient = 0, name="Neff"): 
+        self.U = U
+        self.transient = transient
+        super().__init__(name)
+        
+    def evaluate(self, model: Reservoir):
       model.reset_initial_state()
-      model.warm_up(U[:transient])
-      activation_covariance = np.cov(model.predict(U[transient:None]).T) #building the covariance matrix
+      model.warm_up(self.U[:self.transient])
+      activation_covariance = np.cov(model.predict(self.U[self.transient:None]).T) #building the covariance matrix
       eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
       return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
     
-    
-
-"""
-Class generalizing the evaluation procedure for all metrics implemented up to now, provdinging 
-unified methods for measurment, comparison and optimal parameter research. 
-
-"""
-class Evaluator(): 
-    def __init__(): 
-         super().__init__()
-
-    def measure_intrinsic(slef, model: Reservoir, metric: Metric, data: TimeseriesDATA):
-        return #@TODO implement 
-
-    def measure_estrinsic(slef, model: Reservoir, metric: Metric, data: TimeseriesDATA):
-        return #@TODO implement 
-
-    def compare(self, models, metric): 
-        return  #@TODO implement 
-    
-    def grid_search(): 
-        return
-      

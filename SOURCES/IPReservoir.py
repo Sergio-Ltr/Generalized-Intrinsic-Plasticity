@@ -6,28 +6,27 @@ import torch.nn.functional as F
 from IntrinsicPlasticity import IPMask 
 
 """
-
+    Implementation of a Reservoir supporting an Intrinsic Plasticity mask: each neurnos targets a known output probability distribution,
+    and tries to optimize a certain loss (KL divergence) between its actual output and that target distribution.
 """
 class IPReservoir(Reservoir): 
-
     """
-    
+    Intializes the Reservoir as it were a Vanilla one, IP scale and bias are set respectively to 1 and 0, while target distribution mask is set as well. 
     """
-    def __init__(self,  M = 1, N = 10, ro_rescale = 1, W_range = (-1, 1), bias = False, bias_range = (-1,1), input_scaling=1, X_sparsity=0, U_sparsity=0, 
+    def __init__(self, M=1, N=10, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), 
  mask: IPMask = None):  
-
+        super().__init__(M, N, desired_rho, input_scaling, bias, Wu_range, Wh_range, bu_range, bh_range, Wu_sparsity, Wh_sparsity, activation)
+        
         # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
         # a tensor with the same number of elements can be sampled from the target distribution.
         self.a = torch.ones(N, requires_grad = False)
         self.b = torch.zeros(N, requires_grad = False)
 
-        super().__init__(M, N, ro_rescale, W_range, bias, bias_range, input_scaling, U_sparsity=U_sparsity, X_sparsity=X_sparsity)
-        
         if mask != None:
             self.set_IP_mask(mask)
 
         # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
-        self.kl_log_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
+        self.kl_loss_func = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
 
         # We will need to sample from the target distribution.
         self.target_sample = torch.tensor([])
@@ -138,7 +137,7 @@ class IPReservoir(Reservoir):
 
     def KL(self, U: torch.Tensor):
         Y = self.predict(U, save_gradients=False)
-        self.kl_value = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+        self.kl_value = self.kl_loss_func(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
         return self.kl_value
 
     """
@@ -149,7 +148,7 @@ class IPReservoir(Reservoir):
         for e in range(epochs):
 
             Y = self.predict(U, save_gradients=True)
-            self.IP_loss = self.kl_log_loss(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
+            self.IP_loss = self.kl_loss_func(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
             self.kl_value = self.IP_loss.detach().flatten()
             self.loss_history.append(self.kl_value)
 
@@ -213,12 +212,12 @@ class IPReservoir(Reservoir):
                     print(f"a:{self.a} - b: {self.b} -  X: {self.X} - Y:{self.Y}")
                     print(f"Summation:{summation} - De_a: {delta_a} - De_b: {delta_b}")
 
-            self.IP_loss = self.kl_log_loss(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
+            self.IP_loss = self.kl_loss_func(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
             self.kl_value = self.IP_loss.detach().flatten()
             self.loss_history.append(self.kl_value)
 
             if verbose: 
-                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.max_eigs()}")
+                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.rho()}")
 
     """
 
@@ -271,17 +270,17 @@ class IPReservoir(Reservoir):
             return torch.view_as_real(torch.linalg.eigvals(torch.matmul(self.W_x,  torch.diag(self.a))))
 
 
-    def max_eigs(self,  scaled = True):
+    def rho(self,  scaled = True):
         if not scaled:
-            return super().max_eigs()
+            return super().rho()
         else:
             return max(abs(torch.linalg.eigvals((torch.matmul(self.W_x,  torch.diag(self.a))))))
         
     
-    def rescale_weights(self, ro_rescale = 0.96, scale_ip =True, verbose = False): 
+    def rescale_weights(self, desired_rho = 0.96, scale_ip =True, verbose = False): 
         if verbose:
-          print(f"Rescaling reccurent weight from their current spetral radius of {self.max_eigs()} to {ro_rescale}")
-        self.W_x = (self.W_x/self.max_eigs(scale_ip) ) * ro_rescale
+          print(f"Rescaling reccurent weight from their current spetral radius of {self.rho()} to {desired_rho}")
+        self.W_x = (self.W_x/self.rho(scale_ip) ) * desired_rho
 
     """
     
@@ -349,7 +348,7 @@ class IPReservoir(Reservoir):
                 print(f"Epoch: {i}) - Safe mode traning - Learning Rate = {eta}")
 
             self.pre_train(U, eta = eta , epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
-            rho_i = self.max_eigs()
+            rho_i = self.rho()
             KL_i = self.IP_loss.item()
 
             if rho_i >= max_rho: # Rollback!
