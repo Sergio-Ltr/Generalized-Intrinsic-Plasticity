@@ -121,6 +121,8 @@ class ReservoirConfiguration:
     def __init__(self, input_dim = 1, N_units = 100, desired_rho = 0.9, input_scaling= 0.1, bias=True, Wu_range = (-1,1), Wh_range = (-1, 1), 
                  bu_range = (-1, 1), bh_range = (-1, 1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), name="Vanilla"):
         
+        self.name = name
+
         self.input_dim = input_dim
         self.N_units = N_units
         self.desired_rho = desired_rho
@@ -138,7 +140,6 @@ class ReservoirConfiguration:
 
         self.activation = activation
 
-        self.name = name
 
     def build_up_model(self) -> Reservoir: 
         return Reservoir(self.input_dim, self.N_units, self.desired_rho, self.input_scaling, self.bias, self.Wu_range, self.Wh_range, 

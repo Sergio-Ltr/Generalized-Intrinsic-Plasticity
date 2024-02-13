@@ -4,6 +4,8 @@ from Metrics import *
 
 import pandas as pd
 import numpy as np
+import pickle
+import os
 
 """
   Class generalizing the evaluation procedure for all metrics implemented up to now, provdinging 
@@ -11,10 +13,18 @@ import numpy as np
 
 """
 class Evaluator(): 
-    def __init__(self, save_csv = False, path = "./../RESULTS/.", experiment_name = "Experiment0"): 
-         super().__init__()
+    def __init__(self, save_results_csv = True, save_models_pickle = True, path = "./../EXPERIMENTS/", experiment_name = "Experiment0"): 
+        self.save_results_csv = save_results_csv
+        self.save_models_pickle = save_models_pickle
+    
+        if save_results_csv or save_models_pickle:
+            self.outdir = f"{path}/{experiment_name}"
 
-    def evaluate_multiple(self,  model_configs: list[ReservoirConfiguration], data: TimeseriesDATA, repetitions: int, transient: int = 100, 
+            if not os.path.exists(self.outdir):
+                os.mkdir(self.outdir)
+        super().__init__()
+
+    def evaluate_multiple(self, model_configs: list[ReservoirConfiguration], data: TimeseriesDATA, repetitions: int, transient: int = 100, 
                          estrinsic_metrics: list[EstrinsicMetric] = [MSE(), NRMSE()], intrinsic_metrics: list[IntrinsicMetric] = [MC(), MLLE(), DeltaPhi(), Neff()]):
         
         X_TR, Y_TR = data.TR()
@@ -61,8 +71,59 @@ class Evaluator():
         df.insert(1, "Aggregation", ["Mean" if i % 2 == 0 else "Std" for i in range(2*len(model_configs))])
         df.insert(0, "Model Name", [model_names[int(i/2)] for i in range(2*len(model_names))])
 
+        if self.save_models:
+            self.save_models(model_configs)    
+
+        if self.save_results_csv: 
+            df.to_csv(f"{self.outdir}/RESULTS.CSV")
+
         return df 
     
     def grid_search() -> ReservoirConfiguration: 
         return
+
+
+    """
+        Saves a list of model in a unique pickle file. 
+        Created to automatize comparison procedures
+    """
+    def save_models(self, model_config: list[ReservoirConfiguration]): 
+        with open(f"{self.outdir}/MODELS.pickle", "wb") as outfile:
+            # "wb" argument opens the file in binary mode
+            pickle.dump(model_config, outfile)
+
+    """
+        Load multiple model from a unique pickle file. 
+        Created to repeat already executed or previously defined experiments.
+    """
+    def load_models(self) -> list[ReservoirConfiguration]: 
+        with open(f"{self.outdir}/MODELS.pickle", "rb") as infile:
+            return pickle.load(infile) 
+
+
+    """
+        Saves the configuration of a single model. 
+        Created to store best model found with grid searches.
+    """
+    def save_model_config(self, model_config: ReservoirConfiguration, prefix=""):
+        if not os.path.exists(self.outdir):
+            os.mkdir(self.outdir)
+        
+        if not os.path.exists(f"{self.outdir}/MODELS"):
+             os.mkdir(f"{self.outdir}/MODELS")
+          
+        with open(f"{self.outdir}/MODELS/{prefix}{model_config.name}.pickle", "wb") as outfile:
+            # "wb" argument opens the file in binary mode
+            pickle.dump(model_config, outfile)
+    
+
+    """
+        Load the configuration of a single model. 
+        Created to load the best models found with grid searches.
+    """
+    def load_model_config(self, filename:str) -> ReservoirConfiguration:
+        with open(f"{self.outdir}/MODELS/{filename}.pickle", "rb") as infile:
+            return pickle.load(infile) 
+
+
     
