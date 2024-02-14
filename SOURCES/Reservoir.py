@@ -23,47 +23,57 @@ class Reservoir():
         Wh_dist = torch.distributions.uniform.Uniform(Wh_range[0], Wh_range[1])
         
         # Apply sparsity
-        self.W_u = torch.nn.functional.dropout(Wu_dist.sample((M, N)), Wu_sparsity) * input_scaling # TODO add feature selection parameter (W-U sparsity)
+        self.W_u = torch.nn.functional.dropout(Wu_dist.sample((M, N)), Wu_sparsity) * input_scaling
         self.W_h = torch.nn.functional.dropout(Wh_dist.sample((N, N)), Wh_sparsity) 
 
+        # Handle different biasing possibilities.
         if not bias: 
           bu_dist = torch.distributions.uniform.Uniform(bu_range[0], bu_range[1])
           bh_dist = torch.distributions.uniform.Uniform(bh_range[0], bh_range[1])
           self.b_u = bu_dist.sample((1,N)) * input_scaling
-          self.b_x = bh_dist.sample((1,N))
+          self.b_h = bh_dist.sample((1,N))
         else: 
-          self.b_u = torch.zeros((1,N)) * input_scaling
-          self.b_x = torch.zeros((1,N))
+          self.b_u = torch.zeros((1,N))
+          self.b_h = torch.zeros((1,N))
 
+        self.total_bias = self.b_u + self.b_h
+
+        # Save the choesen activation function. 
         self.activation = activation
         
         # Rescale recurrent weights to unitry spectral radius 
         self.rescale_weights(desired_rho)
 
         # Initialize first internal states with zeros.
-        self.Y = torch.zeros(N)
+        self.h_t = torch.zeros(N)
 
     """
       Porject a M-dimension input signal within a reservoir, returnin its N-dimensional transformed version. 
     """
-    def predict(self, U: torch.Tensor):
+    def predict(self, U: torch.Tensor, return_z = False):
         # Count number of timesteps to be porocessed.
-        l = U.shape[0]
-        output = torch.zeros((l, self.N))
+        T = U.shape[0]
+        H = torch.zeros((T, self.N))
+        if return_z: 
+          Z = torch.zeros((T, self.N))
 
         # Iterate over each input timestamp 
-        for i in range(l):
-            self.Y = self.activation(torch.mul(U[i], self.W_u) + self.b_u + torch.matmul(self.Y, self.W_h) + self.b_x)
-            output[i, :] = self.Y
+        for t in range(T):
+            self.z_t = torch.mul(U[t], self.W_u) + torch.matmul(self.h_t, self.W_h) + self.total_bias
+            self.h_t = self.activation(self.z_t)
+           
+            H[t, :] = self.h_t
+            if return_z: 
+                Z[t, :] = self.z_t 
 
-        return output
+        return H,Z if return_z else H
 
     """
       Predics an initial part of an input signal so that the reservoir state is not completely null. 
       No output value is returned.
     """
     def warm_up(self, U:torch.Tensor, force = False, verbose = False): 
-      if self.Y.any() and not force: 
+      if self.h_t.any() and not force: 
           if verbose:
             print('No transient applied. Reservoir was already warmed up') 
           return False
@@ -77,7 +87,7 @@ class Reservoir():
       Useful before the computation of some intrinsic metric, or before start collecting transformed signal to train a readout. 
     """
     def reset_initial_state(self): 
-      self.Y = torch.zeros(self.N)
+      self.h_t = torch.zeros(self.N)
 
     
     """
@@ -88,14 +98,6 @@ class Reservoir():
         print("Reservoir units", self.M)
         print("Input weights", self.W_u.shape )
         print("Reccurent weights", self.W_h.shape )
-
-
-    """
-      Log function to visualize the maxiumum eigenvalue of the recurrent weight matrix followed by all the (N-1) remianing ones.
-    """
-    def print_eigs(self):
-        print(f"Maximum absolute value of the eignevalue of the reccurent weight matrix: { self.rho()}")
-        print(torch.view_as_real(torch.linalg.eigvals(self.W_h)))
 
 
     """

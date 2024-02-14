@@ -3,18 +3,21 @@ import numpy as np
 from ESN import Reservoir
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from IntrinsicPlasticity import IPMask 
+from IPMask import IPMask 
 
 """
     Implementation of a Reservoir supporting an Intrinsic Plasticity mask: each neurnos targets a known output probability distribution,
     and tries to optimize a certain loss (KL divergence) between its actual output and that target distribution.
 """
 class IPReservoir(Reservoir): 
+    
     """
-    Intializes the Reservoir as it were a Vanilla one, IP scale and bias are set respectively to 1 and 0, while target distribution mask is set as well. 
+        Intializes the Reservoir as it were a Vanilla one, IP scale and bias are set respectively to 1 and 0, 
+        while if passed, a target distribution mask is set as well. 
     """
     def __init__(self, M=1, N=10, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), 
  mask: IPMask = None):  
+        # Initialize a Vanilla Reservoir following whgat specified in the constructor.
         super().__init__(M, N, desired_rho, input_scaling, bias, Wu_range, Wh_range, bu_range, bh_range, Wu_sparsity, Wh_sparsity, activation)
         
         # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
@@ -25,21 +28,8 @@ class IPReservoir(Reservoir):
         if mask != None:
             self.set_IP_mask(mask)
 
-        # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
-        self.kl_loss_func = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
-
-        # We will need to sample from the target distribution.
-        self.target_sample = torch.tensor([])
-
-        # To compute thge KL we will use the log softmax of the sample (Pytorch style). 
-        self.softmax_target_sample = torch.tensor([])
-
-        #Initialize an empty buffer where data will be further saved for statistics
-        self.buffer = None
-
-
     """
-
+        Configure target distributions for each neuron of the model, so that IP can then be adapted.
     """
     def set_IP_mask(self, mask: IPMask): 
         if self.N != mask.N:
@@ -48,282 +38,144 @@ class IPReservoir(Reservoir):
         
         self.mask = mask
 
-    """
-    
-    """
-    def sample_targets(self, timesteps_number, overwrite = False): 
-        if self.target_sample.shape[0] == 0 or overwrite:
-            self.target_sample = self.mask.sample(timesteps_number)
+        # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
+        self.kl_loss_func = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
 
-            if self.mask.apply_activation == False: 
-                self.softmax_target_sample = F.log_softmax(self.target_sample, dim = 1)
-            else: 
-                self.softmax_target_sample = F.log_softmax(self.activation(self.target_sample), dim = 1)
+        #Save oriigianl intialization weights before applying the rescale. 
+        self.W_u_init = self.W_u
+        self.W_h_init = self.W_h
+
+        # We will need to sample from the target distribution.
+        self.target_sample = torch.tensor([])
+
+        # To compute thge KL we will use the log softmax of the sample (Pytorch style). 
+        self.softmax_target_sample = torch.tensor([])
         
-        else:
-            print(f"Target were already sampled for a {timesteps_number} steps long timeseries. To sample again (and eventually change samples length), set the param 'overwrite=True'.") 
 
-
+    """"
+        Implementation of the online version of the Intrinsic Plasticity Algorithm.
     """
-    
-    """
-    def predict(self,  U: torch.Tensor, save_gradients = False, save_states = False): 
-        # Count number of timesteps to be porocessed.
-        l = U.shape[0]
-        output = torch.zeros((l, self.N))
-
-        if save_states: 
-            self.buffer = torch.zeros((l, self.N))
-
-        # Start building computational graph if specified
-        # such option will be used when collecting activations for batch IP. 
-        if save_gradients == True: 
-            self.a.requires_grad = True
-            self.b.requires_grad = True
-
-        # Iterate over each input timestamp 
-        for i in range(l):
-            # Useful to plot neural activity histogram            
-            self.X = torch.matmul(torch.mul(U[i], self.W_u), torch.diag(self.a)) + self.b_u + torch.matmul(torch.matmul( self.Y, self.W_x), torch.diag(self.a)) + self.b_x + self.b 
-            self.Y = self.activation(self.X)
-            
-            if save_states: 
-                self.buffer[i, :] = self.X #if self.mask.apply_activation else self.X # Maybe self.Y here?? @TODO check!
-            
-            output[i, :] = self.Y
-
-        return output
-
-
-    """
-
-    """
-    def pre_train(self, U: torch.Tensor, eta = 0.000025, epochs = 10, transient = 100, learning_rule = "default", verbose=True, debug=False): 
+    def IP_online(self, U, eta = 0.000025,  epochs = 10, transient=100, verbose=False, debug=False):
         # Check if any target distribution has been defined.
         if self.mask == None: 
             print("Error: Unable to train Intrinsic Plasticity without having set any target distribution. Try setting a mask for the reservoir.")
             return 
         
-        if transient != 0: 
-            warm_up_applied = self.warm_up(U[0:transient], verbose)
-
-            if warm_up_applied:
-                U = U[transient:None]
-
-        # Check if any sample has ever been collected. 
-        N_sample = self.target_sample.shape[0]
-        N_train = U.shape[0]
-
-        if N_sample != N_train:
-            self.sample_targets(N_train, True)
-
-            # Save here the evolution of the KL divergence 
-            self.loss_history = []
-        
-
-        if learning_rule == "default": 
-            learning_rule = "online" if self.mask.areAllGaussian else "autodiff"
-
-        if learning_rule == "online": 
-            self.pre_train_online(U, eta, epochs, verbose, debug)
-            return
-
-        if learning_rule == "autodiff": 
-            self.pre_train_batch(U, eta, epochs, verbose)
-            return 
-        
-        print(f"Error: No learnin rule corresponding to '{learning_rule}'. Try using  learning_rule = 'online'  if target distributions are all Gaussian, otherwise try using  learning_rule = 'autodiff.")
-
-
-    def KL(self, U: torch.Tensor):
-        Y = self.predict(U, save_gradients=False)
-        self.kl_value = self.kl_loss_func(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
-        return self.kl_value
-
-    """
-
-    """
-    def pre_train_batch(self, U: torch.Tensor, eta = 0.000025, epochs = 10, verbose = False):
-        
-        for e in range(epochs):
-
-            Y = self.predict(U, save_gradients=True)
-            self.IP_loss = self.kl_loss_func(F.log_softmax(Y, dim = 1), self.softmax_target_sample)
-            self.kl_value = self.IP_loss.detach().flatten()
-            self.loss_history.append(self.kl_value)
-
-            self.IP_loss.backward(create_graph=True)
-
-            self.a = (self.a - torch.mul(eta, self.a.grad)).detach()
-            self.b = (self.b - torch.mul(eta, self.b.grad )).detach()
-            
-            self.a.grad = None
-            self.b.grad = None
-
-            self.a.requires_grad = False
-            self.a.requires_grad = False
-
-
-            if verbose: 
-                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}.")
-
-
-    """"
-    
-    """
-    def pre_train_online(self, U, eta = 0.000025,  epochs = 10, verbose=False, debug=False):
+        # Check if the distribution can be learned analytically or autodiff is strictly needed. 
         if self.mask.areAllGaussian == False:
             print("WARNING: Only target  Gaussian distributions can be learned online. Use batch IP.")
             return 
         
+        # Get the target distribution parameters from the mask. 
         mu = self.mask.means()
-        sigma = self.mask.stds()
+        var = self.mask.stds()**2
 
-        square_sigma = torch.mul(sigma, sigma)
-
-        self.a_history = [] 
-        self.b_history = []
-
-        for e in range(epochs):
-            i = 0
+        for _ in range(epochs):
             # Iterate over each timestep of the input timeseries
-            for U_t in U:
-                # Fed the reservoir withn the current timestep of the input timeseries, 
-                # in order to update the internal states X and Y before applying the online learnin rule. 
-                self.predict(torch.tensor([U_t]),False,False)
-                
-                if debug: 
-                    i += 1
-                    print(f"------------------- Timestep: {i} ----------------------")
-                    print(f"a:{self.a} - b: {self.b} - U: {U_t} - X: {self.X} - Y:{self.Y}")
 
-                summation = 2 * square_sigma - 1 - torch.mul(self.Y, self.Y) + torch.mul(mu, self.Y)
+             # Reset reservoir state and warm it up with the first steps of the timeseries. 
+            self.reset_initial_state()
+            self.warm_up(U[:transient])
+            
+            for U_t in U[transient:None]:
+                #Process current timestep, updating reservoir internal state.  
+                self.predict(torch.tensor([U_t]))
 
-                delta_b = - torch.mul(eta, (torch.div(- mu, square_sigma)) + torch.mul(torch.div(self.Y, square_sigma), summation))
-                delta_a = torch.div(eta, self.a) + torch.mul(delta_b, self.X) 
+                # Compute IP parameter derivatives
+                summation = 2 * var + 1 - self.h_t**2 + torch.mul(mu, self.h_t)
 
-                self.b += delta_b.reshape((self.N))
+                delta_b = - torch.mul(eta, (torch.div(- mu, var)) + torch.mul(torch.div(self.h_t, var), summation))
+                delta_a = torch.div(eta, self.a) - eta*torch.mul(delta_b, self.z_t) 
+
+                # Apply online learning rules. 
+                self.b += delta_b.reshape((self.N)) 
                 self.a += delta_a.reshape((self.N))
 
-                self.a_history.append([self.a, delta_a])         
-                self.b_history.append([self.b, delta_b])
-
+                # Updates reservoir weights according to new IP parameters values
+                self.update_IP_params()
+                
                 if debug: 
-                    print(f"a:{self.a} - b: {self.b} -  X: {self.X} - Y:{self.Y}")
+                    print(f"a:{self.a} - b: {self.b} -  Zs: {self.z_t} - H:{self.h_t}")
                     print(f"Summation:{summation} - De_a: {delta_a} - De_b: {delta_b}")
 
-            self.IP_loss = self.kl_loss_func(F.log_softmax(self.predict(U), dim = 1), self.softmax_target_sample)
-            self.kl_value = self.IP_loss.detach().flatten()
-            self.loss_history.append(self.kl_value)
-
-            if verbose: 
-                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.rho()}")
-
-    """
-
-    """
-    def shape(self):
-        # Call parent method
-        super().shape(self)
-
-        # Also print shapes of the IP parameters. 
-        print("IP gain", self.a.shape )
-        print("IP bias", self.b.shape )
+            #If logs are being collected, this method saves everything in dedicated variables. 
+            self.save_epoch_history(U, verbose)
 
 
     """
-
+        Generalizes the effect of the IP parameters on reservoir weights. 
     """
-    def print_IP_stats(self, units = []):
-        if self.target_sample.shape[0] == 0:
-            print("Nothing to print - Reservoir not pretrained yet.")
-            return 
+    def update_IP_params(self): 
+        # Scale both input and reurrent weihgt matrix according to diagonal of IP gain. 
+        a_diag = torch.diag(self.a)
+        self.W_u = torch.matmul(self.W_u_init, a_diag )
+        self.W_h = torch.matmul(self.W_h_init, a_diag)
         
-        if self.buffer == None: 
-            print("Nothing to print - No activation saved in the buffer")
-            return 
-        
-        for i in range(self.N) if len(units) == 0 else units:
-            actual_std, actual_mean = torch.std_mean(self.buffer[:,i] )
-            target_std, target_mean = torch.std_mean(self.target_sample[:,i])
-            print(f"Unit - ({i + 1}): [ ACTUAL_MEAN == ({actual_mean})  ACTUAL_STD == ({actual_std})][ TARGET_MEAN == ({target_mean}) TARGET_STD == ({target_std})]")
-
-        actual_std, actual_mean = torch.std_mean(self.buffer)
-        print(f"Overall network: [ACTUAL_MEAN == ({actual_mean})  ACTUAL_STD == ({actual_std})]")
+        # Update lienar bias 
+        self.total_bias = self.b_u + self.b_h + self.b
 
 
     """
+        Samples target value for two purposes: evaluate the KL divergence and 
+        graphically show an "ideal" data distribution to compare with the actual one.
+    """
+    def sample_targets(self, timesteps_number): 
+        if self.target_sample.shape[0] == timesteps_number:
+            return
 
+        if self.target_sample.shape[0] > timesteps_number:
+            self.target_sample = self.target_sample[:timesteps_number]
+        else: 
+            self.target_sample = self.mask.sample(timesteps_number) 
+            
+        self.softmax_target_sample = F.log_softmax(self.target_sample, dim = 1)
+       
+    
     """
-    def printLossCurve(self): 
-        #@TODO implement. 
-        return self.loss_history
+        Evaluates the KL divergence on a given input signal w.r.t. to target distribution. 
+        @ TODO move this in metrics or in
     """
+    def evalaute_KL_loss(self, U: torch.Tensor, transient = 100, is_input = True):
+        #Check if there is a right number of samples for the comparison 
+        self.sample_targets(U.shape[0]-transient)
 
-    """
-    def print_eigs(self, scaled = True):
-        if not scaled:
-            print("Eigenvalues of the non scaled weights") 
-            return super().print_eigs()
+        #If the signal is totally external, propagate it through the reservoir.
+        if is_input: 
+            self.reset_initial_state()
+            self.warm_up(U, transient)
+            H,Z = self.predict(U, return_z = True)
+            X = Z if self.mask.pre_activaiton else H
         else:
-            print("Eigenvalues of the scaled weights")
-            return torch.view_as_real(torch.linalg.eigvals(torch.matmul(self.W_x,  torch.diag(self.a))))
+            X = U
 
-
-    def rho(self,  scaled = True):
-        if not scaled:
-            return super().rho()
-        else:
-            return max(abs(torch.linalg.eigvals((torch.matmul(self.W_x,  torch.diag(self.a))))))
+        self.kl_value = self.kl_loss_func(F.log_softmax(X, dim = 1), self.softmax_target_sample)
         
-    
-    def rescale_weights(self, desired_rho = 0.96, scale_ip =True, verbose = False): 
-        if verbose:
-          print(f"Rescaling reccurent weight from their current spetral radius of {self.rho()} to {desired_rho}")
-        self.W_x = (self.W_x/self.rho(scale_ip) ) * desired_rho
-
-    """
-    
-    """
-    def plot_local_neural_activity(self, units = []):        
-        if self.buffer == None: 
-            print("Nothing to print - No activation saved in the buffer")
-            return 
-
-        for i in range(self.buffer.shape[1]) if len(units) == 0 else units:
-            x = self.buffer[:,i]
-
-            x = x.detach().numpy()
-            y = self.target_sample[:,i].detach().numpy()
-
-            xs = np.linspace(y.min(), y.max(), 500)
-            ys = np.zeros_like(xs)
-
-            #plt.set_title(f"Activations of neuron {i+1}")
-            plt.plot(xs, ys)
-            plt.hist([x, y], bins="fd", label=['Actual', 'Target'])
-            plt.show()
+        return self.kl_value
 
 
     """
-    
+        Display the distibution of neuron activation and compares it with the target one.
     """
-    def plot_global_neural_activity(self, apply_activation_X = True, apply_activation_Y=False):
-        if self.buffer == None: 
-            print("Nothing to print - No activation saved in the buffer")
-            return 
-        
-        x = self.buffer
-        y = self.target_sample
+    def plot_neural_activity(self, U: torch.Tensor, transient= 100, plot_target = True, pre_activation = False ):
+        if pre_activation and not self.mask.pre_activaiton: 
+            print("Pre activation target distribution not available")
+            plot_target = False
+            Y = torch.tensor([])
+            
+        if plot_target:
+            self.sample_targets(U.shape[0] - transient)
+            Y = self.target_sample
 
-        if apply_activation_X: 
-            x = self.activation(x)
+            if not pre_activation and self.mask.pre_activaiton: 
+                Y = self.activation(Y)
 
-        if apply_activation_Y: 
-            y = self.activation(y)
+        self.reset_initial_state()
+        self.warm_up(U, transient)
+        H, Z = self.predict(U, return_z = True)
+        X = Z if pre_activation else H
 
-        x = x.flatten().detach().numpy()
-        y = y.flatten().detach().numpy()
+        x = X.flatten().detach().numpy()
+        y = Y.flatten().detach().numpy()
 
         xs = np.linspace(y.min(), y.max(), 500)
         ys = np.zeros_like(xs)
@@ -335,51 +187,85 @@ class IPReservoir(Reservoir):
         plt.ylabel("f(x)")
         plt.show()
 
-    #
-    def safe_mode_pre_train(self, U: torch.Tensor, eta = 0.000025, max_epochs = 25, max_rho =1,  transient = 100, learning_rule = "default", verbose=True, debug=False): 
-        prev_kl = float('inf')
-        rho = 0
-        rolled_back = False
-        poor_learning = False
 
-        for i in range(max_epochs):
-            # Check ESC to decide wheather to use a positive or negative eta 
-            if verbose:
-                print(f"Epoch: {i}) - Safe mode traning - Learning Rate = {eta}")
-
-            self.pre_train(U, eta = eta , epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
-            rho_i = self.rho()
-            KL_i = self.IP_loss.item()
-
-            if rho_i >= max_rho: # Rollback!
-                if verbose: 
-                    print(f"Too high spectral radius: {rho_i}, rolling back to previous state!")
-
-                self.pre_train(U, eta = -eta*1.25, epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
-                rolled_back = True
-                eta = eta/4
-            else:
-                delta_rho = rho - rho_i 
-                delta_KL = prev_kl - KL_i if prev_kl != float('inf') else KL_i
-
-                if (abs(delta_rho) < 0.005) or (abs(delta_KL) < 0.005):
-
-                    if (rolled_back and poor_learning):
-                        if verbose: 
-                            print(f"Algorithm stopped for poor learning. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
-                        break
-
-                    if (poor_learning): 
-                        eta = 2*eta
-                        if verbose: 
-                            print(f"Algorithm learning very slowly. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
-                            print(f"Trying doubling eta: {eta}")
+    """
     
-                    poor_learning = True
+    """
+    def save_epoch_history(self, U_val, verbose = True): 
+        # @TODO Implement 
+        """
+            self.sample_targets(N_train, True)
 
-                else:
-                    # Otherwise, if everything is stable and learning is still happening, simply iterate!        
-                    poor_learning = False
-                    rolled_back = False
+            # Save here the evolution of the KL divergence 
+            self.loss_history = []
+        """
 
+
+        """
+            self.IP_loss = self.kl_loss_func(F.log_softmax(self.predict(U_val), dim = 1), self.softmax_target_sample)
+            self.kl_value = self.IP_loss.detach().flatten()
+            self.loss_history.append(self.kl_value)
+
+            if verbose: 
+                print(f"- Epoch: {e + 1}) | KL Divergence value: {self.IP_loss}. | Spectral radius: {self.rho()}")
+        """
+    
+    
+    """
+        Log function to remind reservoir configuration sizes.   
+        For the IP reservoir, also gain and bias are printed.
+    """
+    def shape(self):
+        # Call parent method
+        super().shape(self)
+
+        # Also print shapes of the IP parameters. 
+        print("IP gain", self.a.shape )
+        print("IP bias", self.b.shape )
+
+
+    """
+        Kind of alternative constructor, cloning a Vanilla reservoir and the if passed, 
+        applying a target distribution mask  as well. 
+    """ 
+    @staticmethod   
+    def clone(original: Reservoir, mask: IPMask): 
+        res = IPReservoir()
         
+        res.M = original.M 
+        res.N = original.N       
+    
+        res.W_u = original.W_u
+        res.b_u = original.b_u
+
+        res.W_h = original.W_h
+        res.b_h = original.b_h
+
+        res.activation = original.activation
+
+        res.a = torch.ones(res.N, requires_grad = False)
+        res.b = torch.zeros(res.N, requires_grad = False)
+        
+        if mask != None:
+            res.set_IP_mask(mask)
+
+        return res
+
+
+    
+
+#################################################################
+    """
+    def analyze_neurons(self, U: torch.Tensor, units = []):
+
+        for i in range(self.N) if len(units) == 0 else units:
+            actual_std, actual_mean = torch.std_mean(self.Z_buffer[:,i] )
+            target_std, target_mean = torch.std_mean(self.target_sample[:,i])
+            print(f"Unit - ({i + 1}): [ ACTUAL_MEAN == ({actual_mean})  ACTUAL_STD == ({actual_std})][ TARGET_MEAN == ({target_mean}) TARGET_STD == ({target_std})]")
+
+        actual_std, actual_mean = torch.std_mean(self.Z_buffer)
+        print(f"Overall network: [ACTUAL_MEAN == ({actual_mean})  ACTUAL_STD == ({actual_std})]")
+    """
+
+    
+   
