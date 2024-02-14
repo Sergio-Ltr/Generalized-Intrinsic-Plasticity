@@ -66,7 +66,7 @@ class Reservoir():
             if return_z: 
                 Z[t, :] = self.z_t 
 
-        return H,Z if return_z else H
+        return (H,Z) if return_z == True else H
 
     """
       Predics an initial part of an input signal so that the reservoir state is not completely null. 
