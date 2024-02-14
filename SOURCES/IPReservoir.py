@@ -1,6 +1,7 @@
 import torch
 import numpy as np
-from ESN import Reservoir
+from torch.nn.modules import Tanh
+from Reservoir import Reservoir, ReservoirConfiguration
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from IPMask import IPMask 
@@ -15,7 +16,7 @@ class IPReservoir(Reservoir):
         Intializes the Reservoir as it were a Vanilla one, IP scale and bias are set respectively to 1 and 0, 
         while if passed, a target distribution mask is set as well. 
     """
-    def __init__(self, M=1, N=10, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), 
+    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), 
  mask: IPMask = None):  
         # Initialize a Vanilla Reservoir following whgat specified in the constructor.
         super().__init__(M, N, desired_rho, input_scaling, bias, Wu_range, Wh_range, bu_range, bh_range, Wu_sparsity, Wh_sparsity, activation)
@@ -55,7 +56,7 @@ class IPReservoir(Reservoir):
     """"
         Implementation of the online version of the Intrinsic Plasticity Algorithm.
     """
-    def IP_online(self, U, eta = 0.000025,  epochs = 10, transient=100, verbose=False, debug=False):
+    def IP_online(self, U, eta = 0.000025,  epochs = 10, transient=100, verbose=False):
         # Check if any target distribution has been defined.
         if self.mask == None: 
             print("Error: Unable to train Intrinsic Plasticity without having set any target distribution. Try setting a mask for the reservoir.")
@@ -93,10 +94,6 @@ class IPReservoir(Reservoir):
 
                 # Updates reservoir weights according to new IP parameters values
                 self.update_IP_params()
-                
-                if debug: 
-                    print(f"a:{self.a} - b: {self.b} -  Zs: {self.z_t} - H:{self.h_t}")
-                    print(f"Summation:{summation} - De_a: {delta_a} - De_b: {delta_b}")
 
             #If logs are being collected, this method saves everything in dedicated variables. 
             self.save_epoch_history(U, verbose)
@@ -228,8 +225,8 @@ class IPReservoir(Reservoir):
         Kind of alternative constructor, cloning a Vanilla reservoir and the if passed, 
         applying a target distribution mask  as well. 
     """ 
-    @staticmethod   
-    def clone(original: Reservoir, mask: IPMask): 
+
+    def clone(original: Reservoir, mask: IPMask = None): 
         res = IPReservoir()
         
         res.M = original.M 
@@ -240,19 +237,18 @@ class IPReservoir(Reservoir):
 
         res.W_h = original.W_h
         res.b_h = original.b_h
-
+        
+        res.total_bias = original.b_h + original.b_u
         res.activation = original.activation
 
-        res.a = torch.ones(res.N, requires_grad = False)
-        res.b = torch.zeros(res.N, requires_grad = False)
-        
+        res.a = torch.ones(original.N)
+        res.b = torch.zeros(original.N)
+
         if mask != None:
             res.set_IP_mask(mask)
 
         return res
 
-
-    
 
 #################################################################
     """
@@ -268,4 +264,26 @@ class IPReservoir(Reservoir):
     """
 
     
-   
+class IPReservoirConfiguration(ReservoirConfiguration):  
+    def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, desired_rho = 0.96, name="IP Reservoir"):
+        
+        self.config = config
+        self.config.name = name
+        self.name = name
+
+        self.mask = mask
+        self.eta = eta
+        self.epochs = epochs
+        self.desired_rho = desired_rho
+
+
+    def build_up_model(self, U_TR, transient = 100):
+        ip_res = IPReservoir.clone( self.config.build_up_model(), self.mask) 
+
+        ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
+        
+        if self.desired_rho != 0:
+            ip_res.rescale_weights(self.desired_rho)
+        
+        ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
+        return ip_res

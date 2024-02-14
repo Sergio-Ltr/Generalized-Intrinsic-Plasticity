@@ -24,7 +24,20 @@ class Evaluator():
                 os.mkdir(self.outdir)
         super().__init__()
 
-    def evaluate_multiple(self, model_configs: list[ReservoirConfiguration], data: TimeseriesDATA, repetitions: int, transient: int = 100, 
+    @staticmethod
+    def evaluate_estrinsic(model: Reservoir, data: TimeseriesDATA, metric: Metric, transient = 100): 
+        X_TR, Y_TR = data.TR()
+        #X_VAL, Y_VAL = data.VAL() Validation set is expectred to be empty now.
+        X_TS, Y_TS = data.TS()
+
+        esn = EchoStateNetwork(model)
+        esn.train(X_TR, Y=Y_TR, transient=transient)
+        y_pred = esn.predict(X_TS)
+
+        return metric.evaluate(y_pred, Y_TS)
+
+        
+    def evaluate_multiple(self, model_configs: list[ReservoirConfiguration] , data: TimeseriesDATA, repetitions: int, transient: int = 100, 
                          estrinsic_metrics: list[EstrinsicMetric] = [MSE(), NRMSE()], intrinsic_metrics: list[IntrinsicMetric] = [MC(), MLLE(), DeltaPhi(), Neff()]):
         
         X_TR, Y_TR = data.TR()
@@ -41,7 +54,7 @@ class Evaluator():
             config_results_matrix = np.zeros([repetitions, metrics_num])
 
             for i in range(repetitions):
-                model = model_config.build_up_model()
+                model = model_config.build_up_model(U_TR=X_TR, transient=transient)
 
                 esn = EchoStateNetwork(model)
                 esn.train(X_TR, Y=Y_TR, transient=transient)
@@ -82,7 +95,7 @@ class Evaluator():
     def grid_search() -> ReservoirConfiguration: 
         return
 
-
+    
     """
         Saves a list of model in a unique pickle file. 
         Created to automatize comparison procedures

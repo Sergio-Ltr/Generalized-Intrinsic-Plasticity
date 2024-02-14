@@ -165,14 +165,14 @@ class MLLE(IntrinsicMetric):
     def evaluate(self, model: Reservoir):
         model.reset_initial_state()      
         model.warm_up(self.U[:self.transient])
-        self.U = self.U[self.transient:None]
+        U = self.U[self.transient:None]
 
         eig_acc = 0
         W_rec = model.W_h * model.a if isinstance(model, IPReservoir) else model.W_h
-        N_s = self.U.shape[0]
+        N_s = U.shape[0]
 
         for t in range(N_s):
-            model.predict(torch.Tensor(self.U[t:t+1]))
+            model.predict(torch.Tensor(U[t:t+1]))
             D = torch.diag(1 - model.h_t**2).numpy()
             eig_k, _ = np.linalg.eig(D*W_rec.numpy())
             eig_acc += np.log(np.absolute(eig_k))

@@ -8,7 +8,8 @@ class Reservoir():
     """
       Initializes all the hyperparameter of a reservoir, mainly sampling random weights. 
     """
-    def __init__(self, M=1, N=10, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh()):
+    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  
+                 bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh()):
         # Number of input features
         self.M = M
         
@@ -115,13 +116,12 @@ class Reservoir():
           print(f"Rescaling reccurent weight from their current spetral radius of {self.rho()} to {desired_rho}")
         self.W_h = (self.W_h/self.rho() ) * desired_rho
 
-
 """
   Configuration Object. Created to automatize repeated evaluation and grid search procedures. 
 """
 class ReservoirConfiguration: 
-    def __init__(self, input_dim = 1, N_units = 100, desired_rho = 0.9, input_scaling= 0.1, bias=True, Wu_range = (-1,1), Wh_range = (-1, 1), 
-                 bu_range = (-1, 1), bh_range = (-1, 1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), name="Vanilla"):
+    def __init__(self, input_dim = 1, N_units = 100, desired_rho = 1, input_scaling = 1, bias=True, Wu_range = (-1,1), Wh_range = (-1, 1), 
+                 bu_range = (-1, 1), bh_range = (-1, 1), Wu_sparsity = 0,  Wh_sparsity = 0, activation = torch.nn.Tanh(), name="Vanilla"):
         
         self.name = name
 
@@ -143,7 +143,7 @@ class ReservoirConfiguration:
         self.activation = activation
 
 
-    def build_up_model(self) -> Reservoir: 
+    def build_up_model(self, U_TR= None, transient = 100) -> Reservoir: 
         return Reservoir(self.input_dim, self.N_units, self.desired_rho, self.input_scaling, self.bias, self.Wu_range, self.Wh_range, 
                           self.bu_range, self.bh_range, self.Wu_sparsity, self.Wh_sparsity, self.activation)
     
