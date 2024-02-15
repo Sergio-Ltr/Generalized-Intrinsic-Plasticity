@@ -38,11 +38,16 @@ class Evaluator():
 
         
     def evaluate_multiple(self, model_configs: list[ReservoirConfiguration] , data: TimeseriesDATA, repetitions: int, transient: int = 100, 
-                         estrinsic_metrics: list[EstrinsicMetric] = [MSE(), NRMSE()], intrinsic_metrics: list[IntrinsicMetric] = [MC(), MLLE(), DeltaPhi(), Neff()]):
-        
+                         estrinsic_metrics: list[EstrinsicMetric] = [MSE(), NRMSE()], intrinsic_metrics: list[IntrinsicMetric] = []):
+
+
         X_TR, Y_TR = data.TR()
         #X_VAL, Y_VAL = data.VAL() Validation set is expectred to be empty now.
         X_TS, Y_TS = data.TS()
+
+                
+        if intrinsic_metrics == []: 
+            intrinsic_metrics = [MC(), MLLE(X_TS), DeltaPhi(), Neff()]
 
         len_est = len(estrinsic_metrics)
         len_int = len(intrinsic_metrics)
@@ -84,18 +89,14 @@ class Evaluator():
         df.insert(1, "Aggregation", ["Mean" if i % 2 == 0 else "Std" for i in range(2*len(model_configs))])
         df.insert(0, "Model Name", [model_names[int(i/2)] for i in range(2*len(model_names))])
 
-        if self.save_models:
+        if self.save_models_pickle:
             self.save_models(model_configs)    
 
         if self.save_results_csv: 
             df.to_csv(f"{self.outdir}/RESULTS.CSV")
 
         return df 
-    
-    def grid_search() -> ReservoirConfiguration: 
-        return
-
-    
+       
     """
         Saves a list of model in a unique pickle file. 
         Created to automatize comparison procedures
@@ -137,6 +138,14 @@ class Evaluator():
     def load_model_config(self, filename:str) -> ReservoirConfiguration:
         with open(f"{self.outdir}/MODELS/{filename}.pickle", "rb") as infile:
             return pickle.load(infile) 
+        
 
+    def grid_search(self, data: TimeseriesDATA, metric: Metric, configs: list[ReservoirConfiguration], repetitions=5, best_to_save=1, transient = 100): #-> list[(float, ReservoirConfiguration)]: 
+        self.save_models_pickle = False
+        df = self.evaluate_multiple(data=data, model_configs=configs, estrinsic_metrics=[metric], intrinsic_metrics=[], repetitions=repetitions, transient=transient)
+        return df #@TODO order by mean of metric  
+
+    def range_to_config(self, ranges: dict) -> list[ReservoirConfiguration]: 
+        pass
 
     

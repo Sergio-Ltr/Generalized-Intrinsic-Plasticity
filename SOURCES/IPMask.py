@@ -83,6 +83,7 @@ class IPMask:
         self.N = len(distributions)
         self.distributions = distributions
         self.pre_activaiton = pre_activaiton 
+        self.to_permute = False
 
         self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
@@ -93,6 +94,9 @@ class IPMask:
             target_samples[:,i] = self.distributions[i].sample(timesteps_number, 1) 
 
         return target_samples
+    
+    def permute_mask(self, mu_neurons): 
+        pass
 
 
     # Useful to compute gradients on the fly
@@ -122,5 +126,12 @@ class IPMask:
         return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], pre_activaiton)
 
     @staticmethod
-    def trimodal(N, linear_rate=(1/3), std_lin = 0.5, std_bim = 0.15, mu = 0.92, pre_activaiton = False):
+    def trimodal(N, linear_rate=(5/9), std_lin = 0.2, std_bim = 0.07, mu = 0.72, pre_activaiton = False):
         return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], pre_activaiton)
+
+    @staticmethod
+    def quadrimodal(N, pre_activaiton = False):
+        return IPMask([IPDistribution.Gaussian([-0.52 if i % 2 == 0 else 0.52, 0.07]) if i < N*1/9 else 
+                       IPDistribution.Gaussian([-0.39 if i % 2 == 0 else 0.39, 0.14]) if i < N*2/9 else
+                       IPDistribution.Gaussian([-0.27 if i % 2 == 0 else 0.27, 0.23]) if i < N*3/9 else
+                       IPDistribution.Gaussian([-0.72 if i % 2 == 0 else 0.72, 0.07]) for i in range(N)], pre_activaiton)
