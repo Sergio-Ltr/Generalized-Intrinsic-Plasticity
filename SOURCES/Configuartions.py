@@ -5,7 +5,7 @@ from DATA import MG17, TimeseriesDATA
 from Evaluator import Evaluator
 from Metrics import *
 import itertools
-
+import os
 
 
 
@@ -100,7 +100,7 @@ class GrdiSearchSpace():
     def get_configs(self, evaluate_vanilla = True): 
         return self.ip_configs if evaluate_vanilla == False else self.ip_configs + self.vanilla_configs
     
-    def evaluate(self, data: TimeseriesDATA = MG17(), metric: Metric = MSE(), repetitions=10 ,transient = 100, evaluate_vanilla=True, grid_search_name = "Grid Search",):
+    def evaluate(self, data: TimeseriesDATA = MG17(), metric: Metric = MSE(), repetitions=10 ,transient = 100, evaluate_vanilla=True, grid_search_name = "GridSearch",):
         results = [["Model", "Lambda", f"Mean {metric.name}", f"Standard Deviation", "Description"]]
 
         X_TR, Y_TR = data.TR()
@@ -129,7 +129,15 @@ class GrdiSearchSpace():
                 config.set_lambda(lambda_thikonov) # Just for plotting reasons.
                 results.append([f"Model {mi}", lambda_thikonov, means[li], stds[li], config.description()])
 
-        
+        df = pd.DataFrame(results[1:None], columns=[results[0]])
+        df.sort_values(df.columns[2])
+
+        if not os.path.exists("./GRID-SEARCHES/"):
+            os.mkdir("./GRID-SEARCHES/")
+
+        super().__init__()
+
+        df.to_csv(f"{grid_search_name}.csv")
         return results
 
             

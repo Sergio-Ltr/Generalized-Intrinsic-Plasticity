@@ -294,14 +294,15 @@ class IPReservoirConfiguration(ReservoirConfiguration):
         self.lambda_thikonv = config.lambda_thikonv
 
 
-    def build_up_model(self, U_TR, transient = 100):
+    def build_up_model(self, U_TR, transient = 100, plot=False):
         ip_res = IPReservoir.clone( self.config.build_up_model()) 
         ip_res.set_IP_mask(self.mask)
 
         ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
         
-        ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
-        
+        if plot(plot = False):
+            ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
+
         return ip_res
     
     def description(self):
