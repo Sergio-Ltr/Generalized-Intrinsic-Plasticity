@@ -1,7 +1,9 @@
 from Reservoir import ReservoirConfiguration
 from IPReservoir import IPReservoirConfiguration
 from IPMask import IPMask
+from DATA import MG17, TimeseriesDATA
 from Evaluator import Evaluator
+from Metrics import *
 import itertools
 
 
@@ -20,12 +22,14 @@ class ReservoirHyperparamSpace():
         self.h_sparsity_range = h_sparsity_range
         self.u_sparsity_range = u_sparsity_range
 
-    def combinations(self): 
         self.bias_space = [[False, 0,0] if switch == False else [True, u,h] for switch,u,h in  itertools.product(*[self.bias_switch, self.bu_scaling_range, self.bh_scaling_range])]
-        self.bias_space = list(filter(lambda bias: bias[0] != False, self.bias_space)) + [[False, 0, 0]] if len(self.bias_switch)>1 else []
+        self.bias_space = list(filter(lambda bias: bias[0] != False, self.bias_space)) + ([[False, 0, 0]] if self.bias_switch[0] ==False or len(self.bias_switch)>1 else [])
+    def combinations(self): 
+        
         return itertools.product(*[self.unit_range, self.rho_range, self.input_scaling_range, self.bias_space, self.h_sparsity_range, self.u_sparsity_range])
     
     def get_configs(self, M=1): 
+        
         return [ReservoirConfiguration(M=M, N=N, desired_rho=rho, input_scaling=input_scaling, bias=bias[0], bu_scaling=bias[1], bh_scaling=bias[2], Wh_sparsity=h_sparsity, Wu_sparsity=u_sparsity) for 
                 N, rho, input_scaling, bias, h_sparsity, u_sparsity in self.combinations()]
          
@@ -68,32 +72,68 @@ class QuadrimodalSpace(IpTargetDistributionSpace):
 
     
 class IPHyperparametersSpace(): 
-    def __init__(self, eta_range=[0.0000025, 0.00025], epochs_range=[10], posterior_rescale_range = [0]) -> None:
+    def __init__(self, eta_range=[0.000025], epochs_range=[0], dist_space: IpTargetDistributionSpace = IpTargetDistributionSpace()) -> None:
         self.eta_range = eta_range
         self.epoch_range = epochs_range
-        self.posterior_rescale_range = posterior_rescale_range
+        self.dist_space = dist_space
 
-    def get_configs(self, inital_reservoir_configs: list[ReservoirConfiguration] = [ReservoirConfiguration()], dist_space: IpTargetDistributionSpace = IpTargetDistributionSpace()) -> list[IPReservoirConfiguration]:
+
+    def get_configs(self, inital_reservoir_configs: list[ReservoirConfiguration] = [ReservoirConfiguration()], ) -> list[IPReservoirConfiguration]:
         configs: list[IPReservoirConfiguration] = []
         for eta, epochs in itertools.product(*[self.eta_range, self.epoch_range]):
             for initial_config in inital_reservoir_configs:
-                for mask in dist_space.masks(initial_config.N):
+                for mask in self.dist_space.masks(initial_config.N):
                     configs.append(IPReservoirConfiguration(config=initial_config, mask=mask, eta=eta, epochs=epochs))
 
         return configs
     
 class GrdiSearchSpace(): 
-    def __init__(self, vanillaReservoirSpace: ReservoirHyperparamSpace, ipHyperparamSpace: IPHyperparametersSpace, lambda_ridge_range=[0, 0.05, 0.1, 0.2]) -> None:
+    def __init__(self, vanillaReservoirSpace: ReservoirHyperparamSpace, ipHyperparamSpace = IPHyperparametersSpace(), lambda_thikonov_range=[0, 0.05, 0.1, 0.2]) -> None:
         self.vavanillaReservoirSpace = vanillaReservoirSpace
         self.ipHyperparamSpace = ipHyperparamSpace
-        
-        self.posterior_rescale_range = ipHyperparamSpace.posterior_rescale_range
-        self.lambda_ridge_range = lambda_ridge_range
+
+        self.lambda_thikonov_range = lambda_thikonov_range
 
         self.vanilla_configs = vanillaReservoirSpace.get_configs()
         self.ip_configs = ipHyperparamSpace.get_configs(self.vanilla_configs)
 
-    def get_configs(self, only_IP = True): 
-        return self.ip_configs if only_IP else self.ip_configs + self.vanilla_configs
+    def get_configs(self, evaluate_vanilla = True): 
+        return self.ip_configs if evaluate_vanilla == False else self.ip_configs + self.vanilla_configs
     
+    def evaluate(self, data: TimeseriesDATA = MG17(), metric: Metric = MSE(), repetitions=10 ,transient = 100, evaluate_vanilla=True, grid_search_name = "Grid Search",):
+        results = [["Model", "Lambda", f"Mean {metric.name}", f"Standard Deviation", "Description"]]
+
+        X_TR, Y_TR = data.TR()
+        X_VAL, Y_VAL = data.VAL()
+        #X_TS, Y_TS = data.TS()
+
+        for mi, config in enumerate(self.get_configs(evaluate_vanilla=evaluate_vanilla)):
+
+            values = np.zeros([repetitions, len( self.lambda_thikonov_range)])
+
+            for ri in range(repetitions):
+
+                model = config.build_up_model(X_TR)
     
+                for li, lambda_thikonov in enumerate( self.lambda_thikonov_range):
+                    esn = EchoStateNetwork(model)
+                    esn.train(X_TR, Y=Y_TR, transient=transient, lambda_thikonov=lambda_thikonov)
+                    y_pred = esn.predict(X_VAL)
+
+                    values[ri,li] = metric.evaluate(y_pred, Y_VAL)
+            
+            means = np.mean(values, axis=0)
+            stds = np.std(values, axis = 0)
+
+            for li, lambda_thikonov in enumerate( self.lambda_thikonov_range):
+                config.set_lambda(lambda_thikonov) # Just for plotting reasons.
+                results.append([f"Model {mi}", lambda_thikonov, means[li], stds[li], config.description()])
+
+        
+        return results
+
+            
+
+
+            
+        #data=data, repetitions=repetitions, transient=transient, estrinsic_metrics=[metric], intrinsic_metrics=other_intrinsics, lambadas=self.lambda_ridge_range)

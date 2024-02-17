@@ -26,13 +26,13 @@ class Evaluator():
         super().__init__()
 
     @staticmethod
-    def evaluate_estrinsic(model: Reservoir, data: TimeseriesDATA, metric: Metric, transient = 100, lambda_ridge = 0): 
+    def evaluate_estrinsic(model: Reservoir, data: TimeseriesDATA, metric: Metric, transient = 100, lambda_thikonov = 0): 
         X_TR, Y_TR = data.TR()
         #X_VAL, Y_VAL = data.VAL() Validation set is expectred to be empty now.
         X_TS, Y_TS = data.TS()
 
         esn = EchoStateNetwork(model)
-        esn.train(X_TR, Y=Y_TR, transient=transient)
+        esn.train(X_TR, Y=Y_TR, transient=transient, lambda_thikonov=lambda_thikonov)
         y_pred = esn.predict(X_TS)
 
         return metric.evaluate(y_pred, Y_TS)
@@ -63,7 +63,7 @@ class Evaluator():
                 model = model_config.build_up_model(U_TR=X_TR, transient=transient)
 
                 esn = EchoStateNetwork(model)
-                esn.train(X_TR, Y=Y_TR, transient=transient)
+                esn.train(X_TR, Y=Y_TR, transient=transient, lambda_thikonov=model_config.lambda_thikonv)
                 y_pred = esn.predict(X_TS)
 
                 for j, e_metric in enumerate(estrinsic_metrics):

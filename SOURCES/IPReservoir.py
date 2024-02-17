@@ -279,7 +279,7 @@ class IPReservoir(Reservoir):
 
     
 class IPReservoirConfiguration(ReservoirConfiguration):  
-    def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, posterior_rho = 0, name="IP Reservoir"):
+    def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, name="IP Reservoir"):
         
         self.config = config
         self.config.name = name
@@ -291,7 +291,7 @@ class IPReservoirConfiguration(ReservoirConfiguration):
         self.mask = mask
         self.eta = eta
         self.epochs = epochs
-        self.posterior_rho = posterior_rho
+        self.lambda_thikonv = config.lambda_thikonv
 
 
     def build_up_model(self, U_TR, transient = 100):
@@ -299,11 +299,6 @@ class IPReservoirConfiguration(ReservoirConfiguration):
         ip_res.set_IP_mask(self.mask)
 
         ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
-
-        if self.posterior_rho != 0:
-            #rescaled_res = IPReservoir.clone(ip_res)
-            ip_res.rescale_weights(self.posterior_rho)
-            #return ip_res, rescaled_res
         
         ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
         
@@ -311,3 +306,8 @@ class IPReservoirConfiguration(ReservoirConfiguration):
     
     def description(self):
         return f"Target: {self.mask.name} |  Eta: {self.eta} - Epochs: {self.epochs} | Initial state: {self.config.description()}"
+    
+    
+    def set_lambda(self, lambda_thikonov):
+       self.lambda_thikonv = lambda_thikonov
+       super().set_lambda(lambda_thikonov)
