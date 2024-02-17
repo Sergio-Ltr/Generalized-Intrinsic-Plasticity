@@ -8,8 +8,7 @@ class Reservoir():
     """
       Initializes all the hyperparameter of a reservoir, mainly sampling random weights. 
     """
-    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  
-                 bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh()):
+    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, bu_scaling = 1, bh_scaling = 1, Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh()):
         # Number of input features
         self.M = M
         
@@ -20,8 +19,8 @@ class Reservoir():
         self.bias = bias
 
         # Sample weight
-        Wu_dist = torch.distributions.uniform.Uniform(Wu_range[0], Wu_range[1])
-        Wh_dist = torch.distributions.uniform.Uniform(Wh_range[0], Wh_range[1])
+        Wu_dist = torch.distributions.uniform.Uniform(-1, 1)
+        Wh_dist = torch.distributions.uniform.Uniform(-1, 1)
         
         # Apply sparsity
         self.W_u = torch.nn.functional.dropout(Wu_dist.sample((M, N)), Wu_sparsity) * input_scaling
@@ -29,10 +28,10 @@ class Reservoir():
 
         # Handle different biasing possibilities.
         if not bias: 
-          bu_dist = torch.distributions.uniform.Uniform(bu_range[0], bu_range[1])
-          bh_dist = torch.distributions.uniform.Uniform(bh_range[0], bh_range[1])
-          self.b_u = bu_dist.sample((1,N)) * input_scaling
-          self.b_h = bh_dist.sample((1,N))
+          bu_dist = torch.distributions.uniform.Uniform(-1, 1)
+          bh_dist = torch.distributions.uniform.Uniform(-1, 1)
+          self.b_u = bu_dist.sample((1,N)) * bu_scaling
+          self.b_h = bh_dist.sample((1,N)) * bh_scaling 
         else: 
           self.b_u = torch.zeros((1,N))
           self.b_h = torch.zeros((1,N))
@@ -120,22 +119,21 @@ class Reservoir():
   Configuration Object. Created to automatize repeated evaluation and grid search procedures. 
 """
 class ReservoirConfiguration: 
-    def __init__(self, input_dim = 1, N_units = 100, desired_rho = 1, input_scaling = 1, bias=True, Wu_range = (-1,1), Wh_range = (-1, 1), 
-                 bu_range = (-1, 1), bh_range = (-1, 1), Wu_sparsity = 0,  Wh_sparsity = 0, activation = torch.nn.Tanh(), name="Vanilla"):
+    def __init__(self, M = 1, N = 100, desired_rho = 1, input_scaling = 1, bias = True,  
+                 bu_scaling = 1, bh_scaling = 1, Wu_sparsity = 0,  Wh_sparsity = 0, activation = torch.nn.Tanh(), name="Vanilla"):
         
         self.name = name
 
-        self.input_dim = input_dim
-        self.N_units = N_units
+        self.M = M
+        self.N = N
+        
         self.desired_rho = desired_rho
         self.input_scaling = input_scaling
         
         self.bias = bias
 
-        self.Wu_range = Wu_range
-        self.Wh_range = Wh_range
-        self.bu_range = bu_range
-        self.bh_range = bh_range
+        self.bu_scaling = bu_scaling
+        self.bh_scaling = bh_scaling
 
         self.Wu_sparsity = Wu_sparsity
         self.Wh_sparsity = Wh_sparsity
@@ -144,7 +142,11 @@ class ReservoirConfiguration:
 
 
     def build_up_model(self, U_TR= None, transient = 100) -> Reservoir: 
-        return Reservoir(self.input_dim, self.N_units, self.desired_rho, self.input_scaling, self.bias, self.Wu_range, self.Wh_range, 
-                          self.bu_range, self.bh_range, self.Wu_sparsity, self.Wh_sparsity, self.activation)
+        return Reservoir(self.M, self.N, self.desired_rho, self.input_scaling, self.bias, self.bu_scaling, self.bh_scaling, self.Wu_sparsity, self.Wh_sparsity, self.activation)
+    
+    def description(self):
+       return f" Units: {self.N}, Input scaling: {self.input_scaling}, Rho: {self.desired_rho} - {'Biased' if self.bias else 'Unbiased'} - Bias scaling: {self.bu_scaling , self.bh_scaling} - Sparsity: {self.Wh_sparsity, self.Wh_sparsity}"
+
+       
     
 

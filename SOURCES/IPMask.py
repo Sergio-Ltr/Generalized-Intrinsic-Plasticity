@@ -1,6 +1,7 @@
 import torch
 import torch.distributions as D
 import functools
+import numpy as np
 from enum import Enum
 
 class IPDistributionType(Enum): 
@@ -71,19 +72,19 @@ class IPDistribution():
         return IPDistribution(IPDistributionType.RANDOM)
 
 
-
 """
-An intrinsic plasticity mask can be viewed as a vector of target distribution to which optimize output of recurrent units of the reservoir. 
+    An intrinsic plasticity mask can be viewed as a vector of target distribution to which optimize output of recurrent units of the reservoir. 
 
-Using a mask, hence multiple target distributions (or also optimizing only a subset of the reservoir units), it would be possible to study wether 
-their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
+    Using a mask, hence multiple target distributions (or also optimizing only a subset of the reservoir units), it would be possible to study wether 
+    their co existance can lead to emergent behaviors and hopefully to something resembling criticality. 
 """
 class IPMask:
-    def __init__(self, distributions : list[IPDistribution], pre_activaiton = True):
+    def __init__(self, distributions : list[IPDistribution], pre_activaiton = False, to_permute = False, name = "Mask"):
         self.N = len(distributions)
         self.distributions = distributions
         self.pre_activaiton = pre_activaiton 
-        self.to_permute = False
+        self.to_permute = to_permute
+        self.name = name
 
         self.areAllGaussian : bool = functools.reduce(lambda  a, b:  a and b.isGaussian(), self.distributions, True )
 
@@ -96,8 +97,14 @@ class IPMask:
         return target_samples
     
     def permute_mask(self, mu_neurons): 
-        pass
+        current_means = self.means()
+        current_stds = self.stds()
 
+        for neuron_idx, target_idx in zip(np.argsort(mu_neurons), np.argsort(self.means())): 
+            self.distributions[neuron_idx].mean = current_means[target_idx]
+            self.distributions[neuron_idx].std = current_stds[target_idx]
+
+        self.to_permute = False
 
     # Useful to compute gradients on the fly
     def means(self):
@@ -115,23 +122,27 @@ class IPMask:
 
     @staticmethod      
     def normal(N, pre_activaiton = False): 
-        return IPMask([IPDistribution.Normal() for _ in range(N)], pre_activaiton)
+        return IPMask([IPDistribution.Normal() for _ in range(N)], pre_activaiton, name = f"Normal")
 
     @staticmethod      
     def gaussian(N, std = 0.25, mu = 0.0, pre_activaiton= False): 
-        return IPMask([IPDistribution.Gaussian([mu, std]) for _ in range(N)], pre_activaiton)
+        return IPMask([IPDistribution.Gaussian([mu, std]) for _ in range(N)], 
+                      pre_activaiton, name = f"Gaussian - mu: {mu} - std: {std}")
 
     @staticmethod
     def bimodal(N, std = 0.07, mu = 0.72, pre_activaiton = False):
-        return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], pre_activaiton)
+        return IPMask([IPDistribution.Gaussian( [-mu if i % 2 == 0 else +mu, std]) for i in range(N)], 
+                      pre_activaiton, name=f"Bimodal - mu: {mu} - std: {std}")
 
     @staticmethod
     def trimodal(N, linear_rate=(5/9), std_lin = 0.2, std_bim = 0.07, mu = 0.72, pre_activaiton = False):
-        return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], pre_activaiton)
+        return IPMask([IPDistribution.Gaussian([0.0, std_lin]) if i < N*linear_rate else IPDistribution.Gaussian([-mu if i % 2 == 0 else mu, std_bim]) for i in range(N)], 
+                      pre_activaiton, name=f"Trimodal - rate:{linear_rate} - mu: {mu} - std_lin: {std_lin} - std_bim:{std_bim}")
 
     @staticmethod
     def quadrimodal(N, pre_activaiton = False):
         return IPMask([IPDistribution.Gaussian([-0.52 if i % 2 == 0 else 0.52, 0.07]) if i < N*1/9 else 
                        IPDistribution.Gaussian([-0.39 if i % 2 == 0 else 0.39, 0.14]) if i < N*2/9 else
                        IPDistribution.Gaussian([-0.27 if i % 2 == 0 else 0.27, 0.23]) if i < N*3/9 else
-                       IPDistribution.Gaussian([-0.72 if i % 2 == 0 else 0.72, 0.07]) for i in range(N)], pre_activaiton)
+                       IPDistribution.Gaussian([-0.72 if i % 2 == 0 else 0.72, 0.07]) for i in range(N)], 
+                       pre_activaiton, name = "Quadrimodal")

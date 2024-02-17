@@ -16,16 +16,17 @@ class Evaluator():
     def __init__(self, save_results_csv = True, save_models_pickle = True, path = "./../EXPERIMENTS/", experiment_name = "Experiment0"): 
         self.save_results_csv = save_results_csv
         self.save_models_pickle = save_models_pickle
+        self.name = experiment_name
     
         if save_results_csv or save_models_pickle:
-            self.outdir = f"{path}/{experiment_name}"
+            self.outdir = f"{path}"
 
             if not os.path.exists(self.outdir):
                 os.mkdir(self.outdir)
         super().__init__()
 
     @staticmethod
-    def evaluate_estrinsic(model: Reservoir, data: TimeseriesDATA, metric: Metric, transient = 100): 
+    def evaluate_estrinsic(model: Reservoir, data: TimeseriesDATA, metric: Metric, transient = 100, lambda_ridge = 0): 
         X_TR, Y_TR = data.TR()
         #X_VAL, Y_VAL = data.VAL() Validation set is expectred to be empty now.
         X_TS, Y_TS = data.TS()
@@ -47,7 +48,7 @@ class Evaluator():
 
                 
         if intrinsic_metrics == []: 
-            intrinsic_metrics = [MC(), MLLE(X_TS), DeltaPhi(), Neff()]
+            intrinsic_metrics = [Rho(),MLLE(X_TS),  DeltaPhi(), MC(), Neff() ]
 
         len_est = len(estrinsic_metrics)
         len_int = len(intrinsic_metrics)
@@ -93,7 +94,7 @@ class Evaluator():
             self.save_models(model_configs)    
 
         if self.save_results_csv: 
-            df.to_csv(f"{self.outdir}/RESULTS.CSV")
+            df.to_csv(f"{self.outdir}/RESULTS-{self.name}.CSV")
 
         return df 
        

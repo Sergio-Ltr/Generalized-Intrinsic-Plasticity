@@ -16,15 +16,14 @@ class IPReservoir(Reservoir):
         Intializes the Reservoir as it were a Vanilla one, IP scale and bias are set respectively to 1 and 0, 
         while if passed, a target distribution mask is set as well. 
     """
-    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, Wu_range = (-1, 1), Wh_range = (-1, 1),  bu_range = (-1,1), bh_range = (-1,1), Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), 
- mask: IPMask = None):  
+    def __init__(self, M=1, N=100, desired_rho = 1, input_scaling = 1, bias = True, bu_scaling = 1, bh_scaling = 1,  Wu_sparsity=0,  Wh_sparsity=0, activation = torch.nn.Tanh(), mask: IPMask = None):  
         # Initialize a Vanilla Reservoir following whgat specified in the constructor.
-        super().__init__(M, N, desired_rho, input_scaling, bias, Wu_range, Wh_range, bu_range, bh_range, Wu_sparsity, Wh_sparsity, activation)
+        super().__init__(M, N, desired_rho, input_scaling, bias, bu_scaling, bh_scaling, Wu_sparsity, Wh_sparsity, activation)
         
         # Initialize the target sample as an empty tensor, so that once a batch of pre training data comes,
         # a tensor with the same number of elements can be sampled from the target distribution.
-        self.a = torch.ones(N, requires_grad = False)
-        self.b = torch.zeros(N, requires_grad = False)
+        self.a = torch.ones(N)
+        self.b = torch.zeros(N)
 
         if mask != None:
             self.set_IP_mask(mask)
@@ -32,13 +31,13 @@ class IPReservoir(Reservoir):
     """
         Configure target distributions for each neuron of the model, so that IP can then be adapted.
     """
-    def set_IP_mask(self, mask: IPMask, to_permute = False): 
+    def set_IP_mask(self, mask: IPMask, permute = True): 
         if self.N != mask.N:
             print(f"Error. Unable to apply a mask with {mask.N} target distributions to a reservoir with {self.N} units.")
             return 
         
         self.mask = mask
-        self.mask.to_be_permuted = to_permute
+        self.mask.to_permute = permute
 
         # To evaluate the displacement w.r.t. to the target distribution, KL divergece is the metric. 
         self.kl_loss_func = torch.nn.KLDivLoss(reduction="batchmean", log_target = True)
@@ -71,6 +70,11 @@ class IPReservoir(Reservoir):
         # Get the target distribution parameters from the mask. 
         mu = self.mask.means()
         var = self.mask.stds()**2
+
+        if self.mask.to_permute: 
+            self.reset_initial_state()
+            self.warm_up(U[:transient])
+            self.mask.permute_mask(torch.mean(self.predict(U[transient:None]),axis=0))
 
         for _ in range(epochs):
             # Iterate over each timestep of the input timeseries
@@ -226,7 +230,7 @@ class IPReservoir(Reservoir):
         Kind of alternative constructor, cloning a Vanilla reservoir and the if passed, 
         applying a target distribution mask  as well. 
     """ 
-
+    @staticmethod
     def clone(original: Reservoir): 
         res = IPReservoir()
         
@@ -250,6 +254,12 @@ class IPReservoir(Reservoir):
             res.W_h_init = original.W_h_init
 
             res.mask = original.mask
+        else: 
+            res.a = torch.ones(res.N)
+            res.b = torch.zeros(res.N)
+
+            res.W_u_init = original.W_u
+            res.W_h_init = original.W_h
 
         return res
 
@@ -275,6 +285,9 @@ class IPReservoirConfiguration(ReservoirConfiguration):
         self.config.name = name
         self.name = name
 
+        self.M = config.M
+        self.N = config.N
+
         self.mask = mask
         self.eta = eta
         self.epochs = epochs
@@ -295,3 +308,6 @@ class IPReservoirConfiguration(ReservoirConfiguration):
         ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
         
         return ip_res
+    
+    def description(self):
+        return f"Target: {self.mask.name} |  Eta: {self.eta} - Epochs: {self.epochs} | Initial state: {self.config.description()}"

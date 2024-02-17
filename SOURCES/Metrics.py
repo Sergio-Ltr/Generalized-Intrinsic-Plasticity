@@ -106,7 +106,7 @@ class IntrinsicMetric(Metric):
   Memory Capacity @TODO add reference paper. 
 """
 class MC(IntrinsicMetric):
-    def __init__(self, U=UNIFORM(size=6000), split_rate= [5000,0, 1000], tau_max = 0, lambda_thikonov = 0, name="MC"):
+    def __init__(self, U=UNIFORM(size=2400), split_rate= [5, 0, 1], tau_max = 0, lambda_thikonov = 0, name="MC"):
         self.U = U
         self.split_rate = split_rate
         self.tau_max = tau_max
@@ -245,3 +245,16 @@ class Neff(IntrinsicMetric):
       eigs = np.linalg.eig(activation_covariance)[0] #compute eigenvalues
       return np.sum(eigs)**2/np.sum(eigs**2) #compute metric
     
+class Rho(IntrinsicMetric): 
+    def __init__(self):
+        super().__init__("Rho")
+        
+    def evaluate(self, model: Reservoir):
+        return model.rho()
+    
+class KL(IntrinsicMetric): 
+    def __init__(self):
+        super().__init__("KL")
+
+    def evaluate(self, model: Reservoir):
+        return model.loss() if isinstance(model, IPReservoir) else None
