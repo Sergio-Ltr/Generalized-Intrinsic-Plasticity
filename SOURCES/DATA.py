@@ -44,7 +44,7 @@ class TimeseriesDATA:
 
 class NARMA10(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [40, 10, 50]):
-        data = torch.tensor(pd.read_csv('./../../../../ESN-IP/DATA/NARMA10.csv', header=None).to_numpy())
+        data = torch.tensor(pd.read_csv('./../../../ESN-IP/DATA/NARMA10.csv', header=None).to_numpy())
 
         self.size = data.shape[1]
 
@@ -57,7 +57,7 @@ class NARMA10(TimeseriesDATA):
     
 class MG17(TimeseriesDATA): 
     def __init__(self, split = True, percentages = [80, 10, 10]) -> None:
-        data = torch.tensor(pd.read_csv('./../../../../ESN-IP/DATA/MG17.csv', header=None).T.to_numpy())
+        data = torch.tensor(pd.read_csv('./../../../ESN-IP/DATA/MG17.csv', header=None).T.to_numpy())
 
         self.size = data.shape[0]
         
@@ -102,12 +102,12 @@ class VerstraetenDambre(UNIFORM):
 
 
 class InubushiErgodic(UNIFORM):
-    def __init__(self, size=5000, ni=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
-        self.ni = ni
+    def __init__(self, size=5000, nu=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
+        self.nu = nu
         super().__init__(size, max_delay, range, split, percentages)
 
     def delay_timeseries(self, tau): 
-        self.Y_DATA = torch.Tensor(np.sin(np.array(self.X_FULL[0: self.size])*self.ni))
+        self.Y_DATA = torch.Tensor(np.sin(np.array(self.X_FULL[0: self.size])*self.nu))
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1]     
 
 

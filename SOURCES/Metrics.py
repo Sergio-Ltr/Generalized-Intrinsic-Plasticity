@@ -253,8 +253,17 @@ class Rho(IntrinsicMetric):
         return model.rho()
     
 class KL(IntrinsicMetric): 
-    def __init__(self):
+    def __init__(self, U=torch.tensor([]), transient=100, is_input=True):
+        self.U = U
+        self.transient = 100
+        self.is_input = is_input
         super().__init__("KL")
 
-    def evaluate(self, model: Reservoir):
-        return model.loss() if isinstance(model, IPReservoir) else None
+    def evaluate(self, model: Reservoir,):
+          if isinstance(model, IPReservoir): 
+            if self.U.shape[0] == 0:
+                return model.loss
+            else:
+                return model.evalaute_loss(self.U, self.transient, self.is_input)
+          else: 
+              return 0

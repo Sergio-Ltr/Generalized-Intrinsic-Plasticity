@@ -101,8 +101,7 @@ class IPMask:
         current_stds = self.stds()
 
         for neuron_idx, target_idx in zip(np.argsort(mu_neurons), np.argsort(self.means())): 
-            self.distributions[neuron_idx].mean = current_means[target_idx]
-            self.distributions[neuron_idx].std = current_stds[target_idx]
+            self.distributions[neuron_idx] = IPDistribution.Gaussian([current_means[target_idx], current_stds[target_idx]]) 
 
         self.to_permute = False
 

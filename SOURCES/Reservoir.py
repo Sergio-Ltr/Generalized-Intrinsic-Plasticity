@@ -73,13 +73,7 @@ class Reservoir():
       No output value is returned.
     """
     def warm_up(self, U:torch.Tensor, force = False, verbose = False): 
-      if self.h_t.any() and not force: 
-          if verbose:
-            print('No transient applied. Reservoir was already warmed up') 
-          return False
-
       self.predict(U)
-      return 
 
       
     """

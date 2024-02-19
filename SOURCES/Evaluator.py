@@ -1,7 +1,6 @@
-from Configurations import ReservoirConfiguration
 from DATA import TimeseriesDATA
 from Metrics import *
-
+from Configuartions import ReservoirConfiguration, IPReservoirConfiguration
 import pandas as pd
 import numpy as np
 import pickle
