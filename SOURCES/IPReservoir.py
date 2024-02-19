@@ -263,6 +263,52 @@ class IPReservoir(Reservoir):
 
         return res
 
+ #
+    def safe_mode_pre_train(self, U: torch.Tensor, eta = 0.000025, max_epochs = 25, max_rho =1,  transient = 100, learning_rule = "default", verbose=True, debug=False): 
+        prev_kl = float('inf')
+        rho = 0
+        rolled_back = False
+        poor_learning = False
+
+        for i in range(max_epochs):
+            # Check ESC to decide wheather to use a positive or negative eta 
+            if verbose:
+                print(f"Epoch: {i}) - Safe mode traning - Learning Rate = {eta}")
+
+            self.pre_train(U, eta = eta , epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
+            rho_i = self.max_eigs()
+            KL_i = self.IP_loss.item()
+
+            if rho_i >= max_rho: # Rollback!
+                if verbose: 
+                    print(f"Too high spectral radius: {rho_i}, rolling back to previous state!")
+
+                self.pre_train(U, eta = -eta*1.25, epochs = 1, transient = transient, learning_rule=learning_rule, verbose=verbose, debug=debug)
+                rolled_back = True
+                eta = eta/4
+            else:
+                delta_rho = rho - rho_i 
+                delta_KL = prev_kl - KL_i if prev_kl != float('inf') else KL_i
+
+                if (abs(delta_rho) < 0.005) or (abs(delta_KL) < 0.005):
+
+                    if (rolled_back and poor_learning):
+                        if verbose: 
+                            print(f"Algorithm stopped for poor learning. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
+                        break
+
+                    if (poor_learning): 
+                        eta = 2*eta
+                        if verbose: 
+                            print(f"Algorithm learning very slowly. Spectral radius variation {delta_rho}. KL variation: {delta_KL}")
+                            print(f"Trying doubling eta: {eta}")
+    
+                    poor_learning = True
+
+                else:
+                    # Otherwise, if everything is stable and learning is still happening, simply iterate!        
+                    poor_learning = False
+                    rolled_back = False
 
 #################################################################
     """
@@ -278,37 +324,3 @@ class IPReservoir(Reservoir):
     """
 
     
-class IPReservoirConfiguration(ReservoirConfiguration):  
-    def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, name="IP Reservoir"):
-        
-        self.config = config
-        self.config.name = name
-        self.name = name
-
-        self.M = config.M
-        self.N = config.N
-
-        self.mask = mask
-        self.eta = eta
-        self.epochs = epochs
-        self.lambda_thikonv = config.lambda_thikonv
-
-
-    def build_up_model(self, U_TR, transient = 100, plot=False):
-        ip_res = IPReservoir.clone( self.config.build_up_model()) 
-        ip_res.set_IP_mask(self.mask)
-
-        ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
-        
-        if plot(plot = False):
-            ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
-
-        return ip_res
-    
-    def description(self):
-        return f"Target: {self.mask.name} |  Eta: {self.eta} - Epochs: {self.epochs} | Initial state: {self.config.description()}"
-    
-    
-    def set_lambda(self, lambda_thikonov):
-       self.lambda_thikonv = lambda_thikonov
-       super().set_lambda(lambda_thikonov)

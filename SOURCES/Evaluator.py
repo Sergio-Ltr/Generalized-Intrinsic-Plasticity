@@ -1,4 +1,4 @@
-from Reservoir import ReservoirConfiguration
+from Configurations import ReservoirConfiguration
 from DATA import TimeseriesDATA
 from Metrics import *
 
@@ -141,12 +141,3 @@ class Evaluator():
             return pickle.load(infile) 
         
 
-    def grid_search(self, data: TimeseriesDATA, metric: Metric, configs: list[ReservoirConfiguration], repetitions=5, best_to_save=1, transient = 100): #-> list[(float, ReservoirConfiguration)]: 
-        self.save_models_pickle = False
-        df = self.evaluate_multiple(data=data, model_configs=configs, estrinsic_metrics=[metric], intrinsic_metrics=[], repetitions=repetitions, transient=transient)
-        return df #@TODO order by mean of metric  
-
-    def range_to_config(self, ranges: dict) -> list[ReservoirConfiguration]: 
-        pass
-
-    

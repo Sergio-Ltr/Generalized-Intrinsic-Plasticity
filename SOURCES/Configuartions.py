@@ -1,11 +1,82 @@
-from Reservoir import ReservoirConfiguration
-from IPReservoir import IPReservoirConfiguration
 from IPMask import IPMask
 from DATA import MG17, TimeseriesDATA
-from Evaluator import Evaluator
 from Metrics import *
 import itertools
 import os
+
+
+"""
+  Configuration Object. Created to automatize repeated evaluation and grid search procedures. 
+"""
+class ReservoirConfiguration: 
+    def __init__(self, M = 1, N = 100, desired_rho = 1, input_scaling = 1, bias = True,  
+                 bu_scaling = 1, bh_scaling = 1, Wu_sparsity = 0,  Wh_sparsity = 0, activation = torch.nn.Tanh(), lambda_thikonv=0, name="Vanilla"):
+        
+        self.name = name
+
+        self.M = M
+        self.N = N
+        
+        self.desired_rho = desired_rho
+        self.input_scaling = input_scaling
+        
+        self.bias = bias
+
+        self.bu_scaling = bu_scaling
+        self.bh_scaling = bh_scaling
+
+        self.Wu_sparsity = Wu_sparsity
+        self.Wh_sparsity = Wh_sparsity
+
+        self.activation = activation
+        self.lambda_thikonv = lambda_thikonv
+
+
+    def build_up_model(self, U_TR= None, transient = 100) -> Reservoir: 
+        return Reservoir(self.M, self.N, self.desired_rho, self.input_scaling, self.bias, self.bu_scaling, self.bh_scaling, self.Wu_sparsity, self.Wh_sparsity, self.activation)
+    
+    def description(self):
+       return f" Units: {self.N}, Input scaling: {self.input_scaling}, Rho: {self.desired_rho} - Lambda: {self.lambda_thikonv} - {'Biased' if self.bias else 'Unbiased'} - Bias scaling: {self.bu_scaling , self.bh_scaling} - Sparsity: {self.Wh_sparsity, self.Wh_sparsity}"
+
+    def set_lambda(self, lambda_thikonov):
+       self.lambda_thikonv = lambda_thikonov
+
+
+
+class IPReservoirConfiguration(ReservoirConfiguration):  
+    def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, name="IP Reservoir"):
+        
+        self.config = config
+        self.config.name = name
+        self.name = name
+
+        self.M = config.M
+        self.N = config.N
+
+        self.mask = mask
+        self.eta = eta
+        self.epochs = epochs
+        self.lambda_thikonv = config.lambda_thikonv
+
+
+    def build_up_model(self, U_TR, transient = 100, plot=False):
+        ip_res = IPReservoir.clone( self.config.build_up_model()) 
+        ip_res.set_IP_mask(self.mask)
+
+        ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
+        
+        if plot(plot = False):
+            ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
+
+        return ip_res
+    
+    def description(self):
+        return f"Target: {self.mask.name} |  Eta: {self.eta} - Epochs: {self.epochs} | Initial state: {self.config.description()}"
+    
+    
+    def set_lambda(self, lambda_thikonov):
+       self.lambda_thikonv = lambda_thikonov
+       super().set_lambda(lambda_thikonov)
 
 
 
@@ -140,7 +211,6 @@ class GrdiSearchSpace():
         df.to_csv(f"{grid_search_name}.csv")
         return results
 
-            
 
 
             
