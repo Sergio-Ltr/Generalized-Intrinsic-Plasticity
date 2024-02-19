@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 
 from Reservoir import Reservoir
-from IPReservoir import IPReservoir
 from ESN import EchoStateNetwork
 from DATA import UNIFORM, TimeseriesDATA
 
@@ -168,7 +167,7 @@ class MLLE(IntrinsicMetric):
         U = self.U[self.transient:None]
 
         eig_acc = 0
-        W_rec = model.W_h * model.a if isinstance(model, IPReservoir) else model.W_h
+        W_rec = model.W_h * model.a if hasattr(model, "mask") else model.W_h
         N_s = U.shape[0]
 
         for t in range(N_s):
@@ -255,13 +254,14 @@ class Rho(IntrinsicMetric):
 class KL(IntrinsicMetric): 
     def __init__(self, U=torch.tensor([]), transient=100, is_input=True):
         self.U = U
-        self.transient = 100
+        self.transient = transient
         self.is_input = is_input
         super().__init__("KL")
 
     def evaluate(self, model: Reservoir,):
-          if isinstance(model, IPReservoir): 
+          if hasattr(model, "mask"): 
             if self.U.shape[0] == 0:
+                print(model.loss)
                 return model.loss
             else:
                 return model.evalaute_loss(self.U, self.transient, self.is_input)

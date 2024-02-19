@@ -1,5 +1,6 @@
 from IPMask import IPMask
 from DATA import MG17, TimeseriesDATA
+from IPReservoir import IPReservoir
 from Metrics import *
 import itertools
 import os
@@ -47,7 +48,6 @@ class IPReservoirConfiguration(ReservoirConfiguration):
     def __init__(self, config: ReservoirConfiguration, mask: IPMask, eta = 0.0000025, epochs=10, name="IP Reservoir"):
         
         self.config = config
-        self.config.name = name
         self.name = name
 
         self.M = config.M
@@ -65,7 +65,7 @@ class IPReservoirConfiguration(ReservoirConfiguration):
 
         ip_res.IP_online(U = U_TR, eta =self.eta, epochs=self.epochs, transient=transient)
         
-        if plot(plot = False):
+        if plot:
             ip_res.plot_neural_activity(U_TR[:int(len(U_TR)/4)])
 
         return ip_res
@@ -95,8 +95,8 @@ class ReservoirHyperparamSpace():
 
         self.bias_space = [[False, 0,0] if switch == False else [True, u,h] for switch,u,h in  itertools.product(*[self.bias_switch, self.bu_scaling_range, self.bh_scaling_range])]
         self.bias_space = list(filter(lambda bias: bias[0] != False, self.bias_space)) + ([[False, 0, 0]] if self.bias_switch[0] ==False or len(self.bias_switch)>1 else [])
+    
     def combinations(self): 
-        
         return itertools.product(*[self.unit_range, self.rho_range, self.input_scaling_range, self.bias_space, self.h_sparsity_range, self.u_sparsity_range])
     
     def get_configs(self, M=1): 
