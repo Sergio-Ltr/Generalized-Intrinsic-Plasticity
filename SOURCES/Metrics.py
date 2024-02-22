@@ -24,7 +24,7 @@ class Metric():
   Subclass grouping metrics requiring external data source to evaluate. 
 """
 class EstrinsicMetric(Metric):
-    def __init__(self, plot = False, name="Estrinsic Metric"):
+    def __init__(self, plot = False, name="Estrinsic Metric", data =TimeseriesDATA):
         self.plot = plot
         super().__init__(name)
 
@@ -105,7 +105,7 @@ class IntrinsicMetric(Metric):
   Memory Capacity @TODO add reference paper. 
 """
 class MC(IntrinsicMetric):
-    def __init__(self, U=UNIFORM(size=2400), split_rate= [5, 0, 1], tau_max = 0, lambda_thikonov = 0, name="MC"):
+    def __init__(self, U=UNIFORM(size=1200), split_rate= [9, 0, 1], tau_max = 0, lambda_thikonov = 0, name="MC"):
         self.U = U
         self.split_rate = split_rate
         self.tau_max = tau_max

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 class TimeseriesDATA: 
-    def __init__(self) -> None:
+    def __init__(self, split = True, percentages = [40, 10, 50]) -> None:
         self.X_DATA = torch.tensor([])
         self.Y_DATA = torch.tensor([])
         self.size = 0
@@ -69,14 +69,14 @@ class MG17(TimeseriesDATA):
 
 
 class UNIFORM(TimeseriesDATA):
-    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [5000, 0, 1000]):
+    def __init__(self, size=6000, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [5000, 0, 1000], tau=0):
         # super().__init__()
         uniform_dist = torch.distributions.uniform.Uniform(range[0], range[1])
         self.size = size
         self.max_delay = max_delay
         self.X_FULL = uniform_dist.sample((size + max_delay,1)).squeeze()
 
-        self.delay_timeseries(0)
+        self.delay_timeseries(tau)
 
         if split: 
             super().split(percentages)
@@ -88,7 +88,7 @@ class UNIFORM(TimeseriesDATA):
         self.X_DATA = self.X_FULL[tau: self.size + tau] 
  
 
-class VerstraetenDambre(UNIFORM): 
+class ContinousXOR(UNIFORM): 
     def __init__(self, p = 1, size=5000, max_delay = 100, split = True, percentages = [80, 0, 20]):
         self.p = p
         range = (-0.8, 0.8)
@@ -101,12 +101,17 @@ class VerstraetenDambre(UNIFORM):
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1] 
 
 
-class InubushiErgodic(UNIFORM):
-    def __init__(self, size=5000, nu=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10]):
+class InubushiFunction(UNIFORM):
+    def __init__(self, size=5000, nu=1, max_delay = 100, range=(-0.8, 0.8), split = True, percentages = [80, 10, 10], tau=1):
         self.nu = nu
-        super().__init__(size, max_delay, range, split, percentages)
+        super().__init__(size, max_delay, range, split=False)
+        self.delay_timeseries(tau)
+
+        if split:
+            self.split(percentages)
 
     def delay_timeseries(self, tau): 
+        self.tau = tau
         self.Y_DATA = torch.Tensor(np.sin(np.array(self.X_FULL[0: self.size])*self.nu))
         self.X_DATA = self.X_FULL[tau - 1: self.size + tau - 1]     
 

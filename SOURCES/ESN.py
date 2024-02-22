@@ -51,7 +51,7 @@ class EchoStateNetwork():
     self.readout = Readout()
 
 
-  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov=0, transient = 100, verbose = True): 
+  def train(self, U: torch.Tensor, Y: torch.Tensor, lambda_thikonov=0, transient = 100, verbose = False): 
     if transient != 0: 
       self.reservoir.reset_initial_state()
       warm_up_applied = self.reservoir.warm_up(U[:transient])

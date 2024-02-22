@@ -36,10 +36,8 @@ class Evaluator():
 
         return metric.evaluate(y_pred, Y_TS)
 
-        
     def evaluate_multiple(self, model_configs: list[ReservoirConfiguration] , data: TimeseriesDATA, repetitions: int, transient: int = 100, 
                          estrinsic_metrics: list[EstrinsicMetric] = [MSE(), NRMSE()], intrinsic_metrics: list[IntrinsicMetric] = []):
-
 
         X_TR, Y_TR = data.TR()
         #X_VAL, Y_VAL = data.VAL() Validation set is expectred to be empty now.
