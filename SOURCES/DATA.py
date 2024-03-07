@@ -89,11 +89,14 @@ class UNIFORM(TimeseriesDATA):
  
 
 class ContinousXOR(UNIFORM): 
-    def __init__(self, p = 1, size=5000, max_delay = 100, split = True, percentages = [80, 0, 20]):
+    def __init__(self, p = 1, size=5000, max_delay = 100, range = (-0.8, 0.8), split = True, percentages = [80, 0, 20], tau=1):
         self.p = p
-        range = (-0.8, 0.8)
-        
         super().__init__(size, max_delay, range, split, percentages)
+        self.delay_timeseries(tau)
+
+        if split:
+            self.split(percentages)
+
 
     def delay_timeseries(self, tau): 
         R_DATA = [ self.X_FULL[i]*self.X_FULL[i + 1] for i in range(0, self.size)]
